@@ -18,6 +18,14 @@ goes straight to the fly screen: live video, telemetry, takeoff/land, return hom
   low-battery warning, saved straight to the drone. Plus units (ft/m), grid lines and default mode.
 - Screen stays awake while the fly screen is open.
 
+Mockups (drawn from the layouts, not real device screenshots):
+
+| Simple mode | Pro mode |
+|---|---|
+| ![Simple](docs/mockups/2-fly-simple-mode.png) | ![Pro](docs/mockups/3-fly-pro-mode.png) |
+
+More in [docs/mockups](docs/mockups).
+
 ## One-time setup
 
 1. **DJI App Key.** At developer.dji.com go to Apps, then Create App. Choose Mobile SDK and enter the package
