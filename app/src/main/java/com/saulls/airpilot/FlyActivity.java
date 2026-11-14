@@ -14,8 +14,6 @@ import android.widget.FrameLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
-import com.dji.mapkit.core.maps.DJIMap;
-
 import dji.keysdk.CameraKey;
 import dji.keysdk.KeyManager;
 import dji.ux.panel.CameraSettingAdvancedPanel;
@@ -23,7 +21,6 @@ import dji.ux.panel.CameraSettingExposurePanel;
 import dji.ux.utils.DJIProductUtil;
 import dji.ux.widget.FPVOverlayWidget;
 import dji.ux.widget.FPVWidget;
-import dji.ux.widget.MapWidget;
 import dji.ux.widget.ThermalPaletteWidget;
 import dji.ux.widget.config.CameraConfigApertureWidget;
 import dji.ux.widget.config.CameraConfigEVWidget;
@@ -40,7 +37,7 @@ import dji.ux.widget.controls.LensControlWidget;
  */
 public class FlyActivity extends Activity implements Telemetry.Listener {
 
-    private MapWidget mapWidget;
+    private FlightMap mapWidget;
     private ViewGroup parentView;
     private FPVWidget fpvWidget;
     private FPVWidget secondaryFPVWidget;
@@ -97,9 +94,8 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
         deviceHeight = outPoint.y;
         deviceWidth = outPoint.x;
 
-        mapWidget = (MapWidget) findViewById(R.id.map_widget);
-        mapWidget.initAMap(map -> map.setOnMapClickListener((DJIMap.OnMapClickListener) latLng -> onViewClick(mapWidget)));
-        mapWidget.onCreate(savedInstanceState);
+        mapWidget = findViewById(R.id.map_widget);
+        mapWidget.setOnClickListener(v -> onViewClick(mapWidget));
 
         initCameraView();
         parentView = (ViewGroup) findViewById(R.id.root_view);
@@ -125,10 +121,25 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
         hudVSpeed = findViewById(R.id.hud_vspeed);
         hudTime = findViewById(R.id.hud_time);
         modeToggle = findViewById(R.id.mode_toggle);
+        findViewById(R.id.btn_home).setOnClickListener(v -> finish());
+        enlargeCameraMenus();
         modeToggle.setOnClickListener(v -> {
             Prefs.setAdvanced(this, !advanced);
             applyMode();
         });
+    }
+
+    /** DJI draws its camera menus for tablets; scale them up so the text is readable on a phone. */
+    private void enlargeCameraMenus() {
+        final float scale = 1.25f;
+        for (View panel : new View[]{cameraSettingAdvancedPanel, cameraSettingExposurePanel}) {
+            panel.post(() -> {
+                panel.setPivotX(panel.getWidth()); // grow toward the left, away from the shutter column
+                panel.setPivotY(0);
+                panel.setScaleX(scale);
+                panel.setScaleY(scale);
+            });
+        }
     }
 
     /** Shows or hides the pro camera controls. Hidden views keep their space so nothing jumps around. */
@@ -148,6 +159,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
 
     @Override
     public void onTelemetry(Telemetry.Snapshot s) {
+        mapWidget.update(s);
         hudAlt.setText(Units.distance(s.altitudeM, imperial));
         hudDist.setText(Units.distance(s.distanceM, imperial));
         hudSpeed.setText(Units.speed(s.horizontalSpeedMps, imperial));
@@ -177,6 +189,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
             ResizeAnimation mapViewAnimation = new ResizeAnimation(mapWidget, deviceWidth, deviceHeight, width, height, margin);
             mapWidget.startAnimation(mapViewAnimation);
             isMapMini = true;
+            mapWidget.setMini(true);
         } else if (view == mapWidget && isMapMini) {
             hidePanels();
             resizeFPVWidget(width, height, margin, 12);
@@ -184,6 +197,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
             ResizeAnimation mapViewAnimation = new ResizeAnimation(mapWidget, width, height, deviceWidth, deviceHeight, 0);
             mapWidget.startAnimation(mapViewAnimation);
             isMapMini = false;
+            mapWidget.setMini(false);
         }
     }
 
@@ -311,13 +325,11 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
-        mapWidget.onSaveInstanceState(outState);
     }
 
     @Override
     public void onLowMemory() {
         super.onLowMemory();
-        mapWidget.onLowMemory();
     }
 
     private class ResizeAnimation extends Animation {

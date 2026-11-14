@@ -30,6 +30,12 @@ public final class Telemetry {
         public int satellites;
         public boolean flying;
         public boolean goingHome;
+        /** Aircraft position (NaN until GPS has a fix). */
+        public double lat = Double.NaN, lng = Double.NaN;
+        /** Home point (NaN until recorded). */
+        public double homeLat = Double.NaN, homeLng = Double.NaN;
+        /** Heading in degrees, 0 = north, clockwise. */
+        public double yaw = Double.NaN;
     }
 
     public interface Listener {
@@ -87,7 +93,15 @@ public final class Telemetry {
         LocationCoordinate3D loc = state.getAircraftLocation();
         if (loc != null) {
             s.altitudeM = loc.getAltitude();
+            if (valid(loc.getLatitude(), loc.getLongitude())) {
+                s.lat = loc.getLatitude();
+                s.lng = loc.getLongitude();
+            }
             LocationCoordinate2D home = state.getHomeLocation();
+            if (state.isHomeLocationSet() && home != null && valid(home.getLatitude(), home.getLongitude())) {
+                s.homeLat = home.getLatitude();
+                s.homeLng = home.getLongitude();
+            }
             if (state.isHomeLocationSet() && home != null
                     && valid(loc.getLatitude(), loc.getLongitude())
                     && valid(home.getLatitude(), home.getLongitude())) {
@@ -103,6 +117,7 @@ public final class Telemetry {
         s.satellites = state.getSatelliteCount();
         s.flying = state.isFlying();
         s.goingHome = state.isGoingHome();
+        if (state.getAttitude() != null) s.yaw = state.getAttitude().yaw;
 
         LocationCoordinate2D home = state.getHomeLocation();
         recorder.update(s, state.isHomeLocationSet() && home != null ? home.getLatitude() : Double.NaN,

@@ -41,6 +41,14 @@ public final class Prefs {
         sp(c).edit().putBoolean(KEY_GRID, v).apply();
     }
 
+    public static boolean isSatellite(Context c) {
+        return sp(c).getBoolean("satellite_map", false);
+    }
+
+    public static void setSatellite(Context c, boolean v) {
+        sp(c).edit().putBoolean("satellite_map", v).apply();
+    }
+
     static SharedPreferences raw(Context c) {
         return sp(c);
     }
