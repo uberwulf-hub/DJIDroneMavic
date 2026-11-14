@@ -35,7 +35,7 @@ import dji.ux.widget.controls.LensControlWidget;
 /**
  * Activity that shows all the UI elements together
  */
-public class FlyActivity extends Activity implements Telemetry.Listener {
+public class FlyActivity extends Activity implements Telemetry.Listener, SmartMove.Listener {
 
     private FlightMap mapWidget;
     private ViewGroup parentView;
@@ -68,6 +68,11 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
 
     private TextView modeToggle;
     private View closePanelsButton;
+    private View moveBanner;
+    private TextView moveText;
+    private boolean wasFlying;
+    private long flightStartedAt;
+    private android.app.AlertDialog landingDialog;
     private int edgeInset;
     private View simpleHud;
     private TextView hudAlt, hudDist, hudSpeed, hudVSpeed, hudTime;
@@ -125,6 +130,10 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
         modeToggle = findViewById(R.id.mode_toggle);
         findViewById(R.id.btn_home).setOnClickListener(v -> finish());
         applyEdgeInsets();
+        moveBanner = findViewById(R.id.move_banner);
+        moveText = findViewById(R.id.move_text);
+        findViewById(R.id.btn_moves).setOnClickListener(v -> showMovesDialog());
+        findViewById(R.id.move_stop).setOnClickListener(v -> SmartMove.get(this).stop("Stopped."));
         closePanelsButton = findViewById(R.id.btn_close_panels);
         closePanelsButton.setOnClickListener(v -> closeAllPanels());
         parentView.getViewTreeObserver().addOnGlobalLayoutListener(this::updateCloseButton);
@@ -133,6 +142,118 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
             Prefs.setAdvanced(this, !advanced);
             applyMode();
         });
+    }
+
+    // ------------------------------------------------------------ smart moves
+
+    private void showMovesDialog() {
+        if (SmartMove.get(this).isRunning()) return;
+        boolean imperial = Prefs.isImperial(this);
+        View v = getLayoutInflater().inflate(R.layout.dialog_moves, null);
+        android.widget.RadioGroup type = v.findViewById(R.id.move_type);
+        TextView help = v.findViewById(R.id.move_help);
+        TextView sizeLabel = v.findViewById(R.id.size_label);
+        android.widget.RadioButton sizeS = v.findViewById(R.id.size_s);
+        android.widget.RadioButton sizeM = v.findViewById(R.id.size_m);
+        android.widget.RadioButton sizeL = v.findViewById(R.id.size_l);
+        View orbitOptions = v.findViewById(R.id.orbit_options);
+        final double[] orbitSizes = {10, 15, 30};
+        final double[] dronieSizes = {30, 50, 100};
+
+        Runnable refresh = () -> {
+            boolean orbit = type.getCheckedRadioButtonId() == R.id.type_orbit;
+            double[] sizes = orbit ? orbitSizes : dronieSizes;
+            sizeLabel.setText(orbit ? "CIRCLE RADIUS" : "HOW FAR BACK");
+            sizeS.setText(Units.distance(sizes[0], imperial));
+            sizeM.setText(Units.distance(sizes[1], imperial));
+            sizeL.setText(Units.distance(sizes[2], imperial));
+            orbitOptions.setVisibility(orbit ? View.VISIBLE : View.GONE);
+            help.setText(orbit
+                    ? "Circles the spot the camera is pointing at, keeping it in frame. Point the camera at your subject first."
+                    : "Flies backward and up while filming you, for a reveal shot. Face the camera at yourself first.");
+        };
+        type.setOnCheckedChangeListener((g, id) -> refresh.run());
+        refresh.run();
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Smart moves")
+                .setView(v)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Start", (d, w) -> {
+                    SmartMove.Params p = new SmartMove.Params();
+                    boolean orbit = type.getCheckedRadioButtonId() == R.id.type_orbit;
+                    p.type = orbit ? SmartMove.Type.ORBIT : SmartMove.Type.DRONIE;
+                    int sizeId = ((android.widget.RadioGroup) v.findViewById(R.id.size)).getCheckedRadioButtonId();
+                    int idx = sizeId == R.id.size_s ? 0 : sizeId == R.id.size_l ? 2 : 1;
+                    p.radiusM = orbitSizes[idx];
+                    p.distanceM = dronieSizes[idx];
+                    int speedId = ((android.widget.RadioGroup) v.findViewById(R.id.speed)).getCheckedRadioButtonId();
+                    double[] speeds = orbit ? new double[]{1.5, 3, 5} : new double[]{2, 4, 6};
+                    p.speedMps = speeds[speedId == R.id.speed_slow ? 0 : speedId == R.id.speed_fast ? 2 : 1];
+                    p.clockwise = ((android.widget.RadioGroup) v.findViewById(R.id.direction))
+                            .getCheckedRadioButtonId() == R.id.dir_cw;
+                    p.continuous = ((android.widget.CheckBox) v.findViewById(R.id.continuous)).isChecked();
+                    p.recordVideo = ((android.widget.CheckBox) v.findViewById(R.id.record)).isChecked();
+                    String problem = SmartMove.get(this).start(p);
+                    if (problem != null) {
+                        new android.app.AlertDialog.Builder(this)
+                                .setTitle("Can't start")
+                                .setMessage(problem)
+                                .setPositiveButton("OK", null)
+                                .show();
+                    } else {
+                        moveText.setText(orbit ? "Orbit starting…" : "Dronie starting…");
+                        moveBanner.setVisibility(View.VISIBLE);
+                    }
+                })
+                .show();
+    }
+
+    @Override
+    public void onMoveProgress(SmartMove.Type type, float progress, String text) {
+        moveBanner.setVisibility(View.VISIBLE);
+        moveText.setText(text);
+    }
+
+    @Override
+    public void onMoveEnded(SmartMove.Type type, String reason, boolean completed) {
+        moveBanner.setVisibility(View.GONE);
+        android.widget.Toast.makeText(this, reason, android.widget.Toast.LENGTH_LONG).show();
+    }
+
+    // ------------------------------------------------------------ after landing
+
+    private void onLanded() {
+        if (!Prefs.isAutoDownload(this) || isFinishing()) return;
+        long since = flightStartedAt > 0 ? flightStartedAt : System.currentTimeMillis() - 30 * 60 * 1000L;
+        final int[] seconds = {5};
+        landingDialog = new android.app.AlertDialog.Builder(this)
+                .setTitle("Landed")
+                .setMessage("Downloading this flight's photos and videos in 5…")
+                .setNegativeButton("Not now", null)
+                .setPositiveButton("Download now", (d, w) -> startAutoDownload(since))
+                .show();
+        Runnable countdown = new Runnable() {
+            @Override
+            public void run() {
+                if (landingDialog == null || !landingDialog.isShowing()) return;
+                seconds[0]--;
+                if (seconds[0] <= 0) {
+                    landingDialog.dismiss();
+                    startAutoDownload(since);
+                } else {
+                    landingDialog.setMessage("Downloading this flight's photos and videos in " + seconds[0] + "…");
+                    parentView.postDelayed(this, 1000);
+                }
+            }
+        };
+        parentView.postDelayed(countdown, 1000);
+    }
+
+    private void startAutoDownload(long since) {
+        if (isFinishing() || Telemetry.get(this).last().flying) return;
+        startActivity(new android.content.Intent(this, MediaActivity.class)
+                .putExtra(MediaActivity.EXTRA_AUTO_SINCE, since));
     }
 
     /**
@@ -216,6 +337,9 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
 
     @Override
     public void onTelemetry(Telemetry.Snapshot s) {
+        if (s.flying && !wasFlying) flightStartedAt = System.currentTimeMillis();
+        if (!s.flying && wasFlying) onLanded();
+        wasFlying = s.flying;
         mapWidget.update(s);
         hudAlt.setText(Units.distance(s.altitudeM, imperial));
         hudDist.setText(Units.distance(s.distanceM, imperial));
@@ -365,12 +489,16 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
         }
         Telemetry telemetry = Telemetry.get(this);
         telemetry.attach();
+        wasFlying = telemetry.last().flying;
         telemetry.addListener(this);
+        SmartMove.get(this).setListener(this);
+        moveBanner.setVisibility(SmartMove.get(this).isRunning() ? View.VISIBLE : View.GONE);
     }
 
     @Override
     protected void onPause() {
         Telemetry.get(this).removeListener(this);
+        SmartMove.get(this).setListener(null);
         mapWidget.onPause();
         super.onPause();
     }

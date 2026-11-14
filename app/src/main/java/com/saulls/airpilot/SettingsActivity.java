@@ -30,6 +30,7 @@ public class SettingsActivity extends Activity {
     private TextView droneState, droneHint, saveResult;
     private Button saveButton;
     private boolean imperial;
+    private static final int RC_SIGN_IN = 9001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,9 +62,110 @@ public class SettingsActivity extends Activity {
         swImperial.setOnCheckedChangeListener((b, on) -> switchUnits(on));
         swDistLimit.setOnCheckedChangeListener((b, on) -> etMaxDist.setEnabled(on));
 
+        Switch swAuto = findViewById(R.id.sw_auto_download);
+        swAuto.setChecked(Prefs.isAutoDownload(this));
+        swAuto.setOnCheckedChangeListener((b, on) -> Prefs.setAutoDownload(this, on));
+        setupDrive();
+
         updateUnitLabels();
         saveButton.setOnClickListener(v -> saveToDrone());
         loadFromDrone();
+    }
+
+    // ------------------------------------------------------------ Google Drive
+
+    private void setupDrive() {
+        Switch swDrive = findViewById(R.id.sw_drive);
+        Switch swWifi = findViewById(R.id.sw_drive_wifi);
+        Switch swLogs = findViewById(R.id.sw_drive_logs);
+        EditText folder = findViewById(R.id.et_drive_folder);
+
+        swDrive.setChecked(DriveSync.isSwitchOn(this));
+        swWifi.setChecked(DriveSync.wifiOnly(this));
+        swLogs.setChecked(DriveSync.uploadLogs(this));
+        folder.setText(DriveSync.folder(this));
+
+        swDrive.setOnCheckedChangeListener((b, on) -> {
+            if (on && DriveSync.account(this) == null) {
+                startActivityForResult(DriveSync.signInIntent(this), RC_SIGN_IN);
+            }
+            DriveSync.setEnabled(this, on);
+            refreshDrive();
+        });
+        swWifi.setOnCheckedChangeListener((b, on) -> DriveSync.setWifiOnly(this, on));
+        swLogs.setOnCheckedChangeListener((b, on) -> DriveSync.setUploadLogs(this, on));
+        folder.setOnFocusChangeListener((v, has) -> {
+            if (!has) DriveSync.setFolder(this, folder.getText().toString());
+        });
+        folder.setOnEditorActionListener((v, actionId, ev) -> {
+            DriveSync.setFolder(this, folder.getText().toString());
+            folder.setText(DriveSync.folder(this));
+            folder.clearFocus();
+            return false;
+        });
+        findViewById(R.id.btn_drive_signin).setOnClickListener(v -> {
+            if (DriveSync.account(this) != null) {
+                DriveSync.signOut(this);
+                Prefs.raw(this).edit().putBoolean("drive_enabled", false).apply();
+                ((Switch) findViewById(R.id.sw_drive)).setChecked(false);
+                refreshDrive();
+            } else {
+                startActivityForResult(DriveSync.signInIntent(this), RC_SIGN_IN);
+            }
+        });
+        refreshDrive();
+    }
+
+    private void refreshDrive() {
+        com.google.android.gms.auth.api.signin.GoogleSignInAccount a = DriveSync.account(this);
+        ((TextView) findViewById(R.id.drive_account)).setText(a != null
+                ? "Signed in as " + a.getEmail() : "Not signed in");
+        ((Button) findViewById(R.id.btn_drive_signin)).setText(a != null ? "Sign out" : "Sign in with Google");
+        int waiting = DriveSync.pendingCount(this);
+        String st = DriveSync.status(this);
+        String text = waiting > 0 ? waiting + " waiting to upload. " : "";
+        if (!st.isEmpty()) text += "Last: " + st;
+        ((TextView) findViewById(R.id.drive_status)).setText(text);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != RC_SIGN_IN) return;
+        try {
+            com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(data)
+                    .getResult(com.google.android.gms.common.api.ApiException.class);
+            DriveSync.setEnabled(this, true);
+            ((Switch) findViewById(R.id.sw_drive)).setChecked(true);
+        } catch (com.google.android.gms.common.api.ApiException e) {
+            String why;
+            switch (e.getStatusCode()) {
+                case 10:
+                    why = "Google doesn't recognise this app yet (code 10). Check the Android OAuth client in "
+                            + "Google Cloud uses package com.saulls.airpilot and the SHA-1 from the README.";
+                    break;
+                case 12501:
+                    why = "Sign-in was cancelled.";
+                    break;
+                case 7:
+                    why = "No internet connection.";
+                    break;
+                default:
+                    why = "Google sign-in failed (code " + e.getStatusCode() + ").";
+            }
+            ((Switch) findViewById(R.id.sw_drive)).setChecked(false);
+            Prefs.raw(this).edit().putBoolean("drive_enabled", false).apply();
+            new android.app.AlertDialog.Builder(this).setTitle("Google Drive").setMessage(why)
+                    .setPositiveButton("OK", null).show();
+        }
+        refreshDrive();
+    }
+
+    @Override
+    protected void onPause() {
+        EditText folder = findViewById(R.id.et_drive_folder);
+        if (folder != null) DriveSync.setFolder(this, folder.getText().toString());
+        super.onPause();
     }
 
     private void updateUnitLabels() {

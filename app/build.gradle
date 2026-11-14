@@ -16,8 +16,8 @@ android {
         minSdkVersion 23
         // Keep at 30: the DJI SDK v4 is not compatible with newer target SDK behaviour.
         targetSdkVersion 30
-        versionCode 5
-        versionName "0.5.0"
+        versionCode 6
+        versionName "0.6.0"
         multiDexEnabled true
         vectorDrawables.useSupportLibrary = true
         manifestPlaceholders = [djiApiKey: djiApiKey]
@@ -103,6 +103,8 @@ dependencies {
     compileOnly 'com.dji:dji-sdk-provided:4.16.2'
 
     implementation 'org.osmdroid:osmdroid-android:6.1.20'
+    implementation 'com.google.android.gms:play-services-auth:19.2.0'
+    implementation 'androidx.work:work-runtime:2.6.0'
     implementation 'androidx.multidex:multidex:2.0.1'
     implementation 'androidx.appcompat:appcompat:1.2.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.0.4'

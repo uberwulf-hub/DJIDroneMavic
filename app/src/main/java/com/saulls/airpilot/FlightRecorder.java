@@ -25,6 +25,13 @@ import java.util.TimeZone;
  */
 public final class FlightRecorder {
 
+    /** File names for exported/uploaded flights. */
+    static final class FlightExportName {
+        static String of(Flight f) {
+            return "AirPilot_flight_" + new SimpleDateFormat("yyyy-MM-dd_HHmm", Locale.US).format(new Date(f.startMillis));
+        }
+    }
+
     private static final String KEY = "flight_log";
     private static final int MAX_FLIGHTS = 300;
     private static final long SAMPLE_MS = 500;
@@ -223,6 +230,8 @@ public final class FlightRecorder {
         writer = null;
         if (f.durationS >= 5) {
             save(f);
+            File t = f.trackFile(context);
+            if (t != null && t.exists()) DriveSync.enqueueFile(context, t, FlightExportName.of(f) + ".csv");
         } else if (f.track != null) {
             new File(flightsDir(context), f.track).delete(); // motor blip, not a flight
         }

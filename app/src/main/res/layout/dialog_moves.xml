@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/background_blue">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <RadioGroup
+            android:id="@+id/move_type"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/type_orbit"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:checked="true"
+                android:text="Orbit"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <RadioButton
+                android:id="@+id/type_dronie"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Dronie"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </RadioGroup>
+
+        <TextView
+            android:id="@+id/move_help"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="#CCFFFFFF"
+            android:textSize="14sp" />
+
+        <TextView style="@style/SectionTitle" android:id="@+id/size_label" android:text="SIZE" />
+        <RadioGroup
+            android:id="@+id/size"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <RadioButton android:id="@+id/size_s" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#FFFFFF" android:textSize="15sp" />
+            <RadioButton android:id="@+id/size_m" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:checked="true" android:textColor="#FFFFFF" android:textSize="15sp" />
+            <RadioButton android:id="@+id/size_l" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="#FFFFFF" android:textSize="15sp" />
+        </RadioGroup>
+
+        <TextView style="@style/SectionTitle" android:text="SPEED" />
+        <RadioGroup
+            android:id="@+id/speed"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <RadioButton android:id="@+id/speed_slow" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Slow" android:textColor="#FFFFFF" android:textSize="15sp" />
+            <RadioButton android:id="@+id/speed_normal" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:checked="true" android:text="Normal" android:textColor="#FFFFFF" android:textSize="15sp" />
+            <RadioButton android:id="@+id/speed_fast" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Fast" android:textColor="#FFFFFF" android:textSize="15sp" />
+        </RadioGroup>
+
+        <LinearLayout
+            android:id="@+id/orbit_options"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView style="@style/SectionTitle" android:text="DIRECTION" />
+            <RadioGroup
+                android:id="@+id/direction"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <RadioButton android:id="@+id/dir_cw" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:checked="true" android:text="Clockwise ↻" android:textColor="#FFFFFF" android:textSize="15sp" />
+                <RadioButton android:id="@+id/dir_ccw" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Counter ↺" android:textColor="#FFFFFF" android:textSize="15sp" />
+            </RadioGroup>
+
+            <CheckBox
+                android:id="@+id/continuous"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Keep circling until I stop it"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp" />
+        </LinearLayout>
+
+        <CheckBox
+            android:id="@+id/record"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:checked="true"
+            android:text="Record video during the move"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Make sure the area is clear of trees, wires and people. Move either stick at any time to stop and take over."
+            android:textColor="#FFD54F"
+            android:textSize="13sp" />
+    </LinearLayout>
+</ScrollView>

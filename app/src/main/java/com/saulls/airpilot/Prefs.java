@@ -49,6 +49,14 @@ public final class Prefs {
         sp(c).edit().putBoolean("satellite_map", v).apply();
     }
 
+    public static boolean isAutoDownload(Context c) {
+        return sp(c).getBoolean("auto_download", true);
+    }
+
+    public static void setAutoDownload(Context c, boolean v) {
+        sp(c).edit().putBoolean("auto_download", v).apply();
+    }
+
     static SharedPreferences raw(Context c) {
         return sp(c);
     }

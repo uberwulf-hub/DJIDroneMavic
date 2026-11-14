@@ -71,6 +71,65 @@
                 <Switch android:id="@+id/sw_grid" android:layout_width="wrap_content" android:layout_height="wrap_content" />
             </LinearLayout>
 
+            <LinearLayout style="@style/SettingRow">
+                <TextView style="@style/SettingLabel" android:text="Download new photos &amp; videos after landing" />
+                <Switch android:id="@+id/sw_auto_download" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <!-- ===== Google Drive ===== -->
+            <TextView style="@style/SectionTitle" android:text="GOOGLE DRIVE SYNC" />
+            <TextView
+                style="@style/SettingHint"
+                android:text="Uploads every photo and video Air Pilot downloads (and your flight logs) to a Drive folder in the background." />
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView android:id="@+id/drive_account" style="@style/SettingLabel" android:text="Not signed in" />
+                <Button
+                    android:id="@+id/btn_drive_signin"
+                    style="@style/SecondaryButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:paddingLeft="14dp"
+                    android:paddingRight="14dp"
+                    android:text="Sign in with Google"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView style="@style/SettingLabel" android:text="Sync to Google Drive" />
+                <Switch android:id="@+id/sw_drive" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView style="@style/SettingLabel" android:text="Drive folder" />
+                <EditText
+                    android:id="@+id/et_drive_folder"
+                    android:layout_width="200dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:imeOptions="actionDone"
+                    android:inputType="text"
+                    android:singleLine="true"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp" />
+            </LinearLayout>
+            <TextView style="@style/SettingHint" android:text="Use / for subfolders, e.g. Drone/Air Pilot. Air Pilot creates the folder." />
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView style="@style/SettingLabel" android:text="Only upload on Wi-Fi" />
+                <Switch android:id="@+id/sw_drive_wifi" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView style="@style/SettingLabel" android:text="Also upload flight logs (CSV)" />
+                <Switch android:id="@+id/sw_drive_logs" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/drive_status"
+                style="@style/SettingHint"
+                android:layout_marginTop="4dp" />
+
             <!-- ===== Drone ===== -->
             <TextView style="@style/SectionTitle" android:text="DRONE SAFETY  (saved to the drone)" />
             <TextView

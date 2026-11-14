@@ -58,6 +58,9 @@ import dji.sdk.sdkmanager.DJISDKManager;
 public class MediaActivity extends Activity {
 
     private static final String SAVED_KEY = "saved_media";
+    /** Started right after landing: download files from this flight, then return. */
+    public static final String EXTRA_AUTO_SINCE = "auto_since";
+    private long autoSince = -1;
     private static final int TYPE_HEADER = 0, TYPE_ITEM = 1;
 
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -123,6 +126,7 @@ public class MediaActivity extends Activity {
         viewerOpen = findViewById(R.id.viewer_open);
 
         saved = new HashSet<>(Prefs.raw(this).getStringSet(SAVED_KEY, Collections.emptySet()));
+        autoSince = getIntent().getLongExtra(EXTRA_AUTO_SINCE, -1);
 
         int widthDp = (int) (getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density);
         int span = Math.max(3, (widthDp - 32) / 170);
@@ -222,7 +226,11 @@ public class MediaActivity extends Activity {
                     grid.setVisibility(View.VISIBLE);
                 }
                 updateButtons();
-                loadThumbnails();
+                if (autoSince > 0) {
+                    autoDownload();
+                } else {
+                    loadThumbnails();
+                }
             });
         });
     }
@@ -273,6 +281,29 @@ public class MediaActivity extends Activity {
         int i = rows.indexOf(f);
         if (i >= 0) adapter.notifyItemChanged(i);
         if (viewerIndex >= 0 && viewerIndex < files.size() && files.get(viewerIndex) == f) bindViewerImage(f);
+    }
+
+    /** Picks this flight's new files (with a fallback if the drone's clock is off) and downloads them. */
+    private void autoDownload() {
+        List<MediaFile> pick = new ArrayList<>();
+        for (MediaFile f : files) {
+            if (!saved.contains(key(f)) && f.getTimeCreated() >= autoSince - 60_000) pick.add(f);
+        }
+        if (pick.isEmpty()) {
+            long newestSaved = 0;
+            for (MediaFile f : files) if (saved.contains(key(f))) newestSaved = Math.max(newestSaved, f.getTimeCreated());
+            for (MediaFile f : files) {
+                if (!saved.contains(key(f)) && f.getTimeCreated() > newestSaved
+                        && f.getTimeCreated() > System.currentTimeMillis() - 24 * 3600_000L) pick.add(f);
+            }
+        }
+        if (pick.isEmpty()) {
+            android.widget.Toast.makeText(this, "No new photos or videos from this flight.", android.widget.Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
+        setStatus("Downloading " + pick.size() + " new " + (pick.size() == 1 ? "file" : "files") + " from this flight…");
+        startDownload(pick, false);
     }
 
     // ---------------------------------------------------------------- selection
@@ -514,6 +545,14 @@ public class MediaActivity extends Activity {
         updateButtons();
         if (scheduler != null) scheduler.resume(null);
 
+        if (autoSince > 0) {
+            String msg = savedUris.size() + (savedUris.size() == 1 ? " file" : " files") + " saved to the Air Pilot album";
+            if (DriveSync.isEnabled(this) && !savedUris.isEmpty()) msg += " and queued for Google Drive";
+            if (!failures.isEmpty()) msg += ". " + failures.size() + " failed (open Photos & Videos to retry)";
+            android.widget.Toast.makeText(this, msg + ".", android.widget.Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
         if (openWhenDone && savedUris.size() == 1 && failures.isEmpty() && !cancelRequested) {
             openUri(savedUris.get(0));
             return;
@@ -563,6 +602,7 @@ public class MediaActivity extends Activity {
 
     private void markSaved(MediaFile f, Uri uri) {
         savedUris.add(uri);
+        DriveSync.enqueue(this, uri, f.getFileName());
         saved.add(key(f));
         SharedPreferences.Editor e = Prefs.raw(this).edit();
         e.putStringSet(SAVED_KEY, new HashSet<>(saved));

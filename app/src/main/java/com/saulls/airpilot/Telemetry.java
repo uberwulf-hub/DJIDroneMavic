@@ -46,6 +46,8 @@ public final class Telemetry {
         public int batteryPct = -1;
         public double batteryVolts = Double.NaN;
         public double batteryTempC = Double.NaN;
+        /** When this snapshot was taken (phone clock). */
+        public long time = System.currentTimeMillis();
     }
 
     public interface Listener {
