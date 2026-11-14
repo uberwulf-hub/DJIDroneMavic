@@ -3,7 +3,6 @@ package com.saulls.airpilot;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -17,7 +16,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-/** Lists every recorded flight with totals at the top. Tap a flight to see where you flew. */
+/** Lists every recorded flight with totals at the top. Tap a flight for details and export. */
 public class FlightLogActivity extends Activity {
 
     private ListView list;
@@ -33,9 +32,10 @@ public class FlightLogActivity extends Activity {
         totals = findViewById(R.id.totals);
         empty = findViewById(R.id.empty);
         findViewById(R.id.btn_back).setOnClickListener(v -> finish());
+        findViewById(R.id.btn_export).setOnClickListener(v -> exportAll());
         findViewById(R.id.btn_clear).setOnClickListener(v -> new AlertDialog.Builder(this)
                 .setTitle("Clear flight log?")
-                .setMessage("This deletes every saved flight from this phone.")
+                .setMessage("This deletes every saved flight and its detailed track from this phone.")
                 .setPositiveButton("Clear", (d, w) -> {
                     FlightRecorder.clear(this);
                     refresh();
@@ -48,6 +48,16 @@ public class FlightLogActivity extends Activity {
     protected void onResume() {
         super.onResume();
         refresh();
+    }
+
+    private void exportAll() {
+        List<FlightRecorder.Flight> flights = FlightRecorder.load(this);
+        if (flights.isEmpty()) return;
+        try {
+            FlightExport.share(this, "Share flight log", "application/zip", FlightExport.all(this, flights));
+        } catch (Exception e) {
+            android.widget.Toast.makeText(this, "Export failed: " + e.getMessage(), android.widget.Toast.LENGTH_LONG).show();
+        }
     }
 
     private void refresh() {
@@ -79,19 +89,14 @@ public class FlightLogActivity extends Activity {
                 ((TextView) row.findViewById(R.id.stats)).setText(String.format(Locale.US,
                         "%s  ·  up to %s high  ·  %s away  ·  top speed %s",
                         Units.duration(f.durationS), Units.distance(f.maxAltitudeM, imperial),
-                        Units.distance(f.maxDistanceM, imperial), Units.speed(f.maxSpeedMps, imperial)));
+                        Units.distance(f.maxDistanceM, imperial), Units.speed(f.maxSpeedMps, imperial))
+                        + (f.warnings.isEmpty() ? "" : "  \u00B7  \u26A0 " + f.warnings.size()
+                        + (f.warnings.size() == 1 ? " warning" : " warnings")));
                 return row;
             }
         });
-        list.setOnItemClickListener((parent, view, position, id) -> {
-            FlightRecorder.Flight f = flights.get(position);
-            if (Double.isNaN(f.homeLat)) return;
-            Uri uri = Uri.parse(String.format(Locale.US, "geo:%f,%f?q=%f,%f(Takeoff)",
-                    f.homeLat, f.homeLng, f.homeLat, f.homeLng));
-            try {
-                startActivity(new Intent(Intent.ACTION_VIEW, uri));
-            } catch (Exception ignored) {
-            }
-        });
+        list.setOnItemClickListener((parent, view, position, id) -> startActivity(
+                new Intent(this, FlightDetailActivity.class)
+                        .putExtra(FlightDetailActivity.EXTRA_START, flights.get(position).startMillis)));
     }
 }

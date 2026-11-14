@@ -4,23 +4,31 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.widget.BaseAdapter;
 import android.widget.Button;
-import android.widget.GridView;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 import java.io.File;
+import java.text.DateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -42,22 +50,31 @@ import dji.sdk.media.MediaManager;
 import dji.sdk.sdkmanager.DJISDKManager;
 
 /**
- * Browse the drone's SD card and copy photos and videos to the phone's gallery.
+ * Browse the drone's SD card grouped by day. Tap to view, or Select to pick files
+ * (or whole days) and copy them to the phone's gallery, then send them to Drive.
  * The camera is switched to download mode while this screen is open and put back
  * into photo mode when you leave.
  */
 public class MediaActivity extends Activity {
 
     private static final String SAVED_KEY = "saved_media";
+    private static final int TYPE_HEADER = 0, TYPE_ITEM = 1;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
 
-    private GridView grid;
+    private RecyclerView grid;
     private TextView status, message, progressText;
     private View progressRow;
     private ProgressBar progress;
-    private Button downloadButton, selectNewButton;
+    private Button downloadButton, selectNewButton, selectButton;
+
+    // viewer
+    private View viewer;
+    private ImageView viewerImage;
+    private TextView viewerInfo, viewerPlay;
+    private Button viewerDownload, viewerOpen;
+    private int viewerIndex = -1;
 
     private Camera camera;
     private MediaManager mediaManager;
@@ -65,17 +82,21 @@ public class MediaActivity extends Activity {
     private boolean usedPlayback;
 
     private final List<MediaFile> files = new ArrayList<>();
+    /** Rows shown in the grid: a String (day header) or a MediaFile. */
+    private final List<Object> rows = new ArrayList<>();
     private final Set<String> selected = new HashSet<>();
     private Set<String> saved;
+    private boolean selectMode;
     private final MediaAdapter adapter = new MediaAdapter();
 
     // Download queue state
     private List<MediaFile> queue;
     private int queueIndex;
-    private int savedCount;
+    private final ArrayList<Uri> savedUris = new ArrayList<>();
     private final List<String> failures = new ArrayList<>();
     private boolean downloading;
     private boolean cancelRequested;
+    private boolean openWhenDone;
     private MediaFile current;
 
     @Override
@@ -92,22 +113,41 @@ public class MediaActivity extends Activity {
         progressText = findViewById(R.id.progress_text);
         downloadButton = findViewById(R.id.btn_download);
         selectNewButton = findViewById(R.id.btn_select_new);
+        selectButton = findViewById(R.id.btn_select);
+
+        viewer = findViewById(R.id.viewer);
+        viewerImage = findViewById(R.id.viewer_image);
+        viewerInfo = findViewById(R.id.viewer_info);
+        viewerPlay = findViewById(R.id.viewer_play);
+        viewerDownload = findViewById(R.id.viewer_download);
+        viewerOpen = findViewById(R.id.viewer_open);
 
         saved = new HashSet<>(Prefs.raw(this).getStringSet(SAVED_KEY, Collections.emptySet()));
 
-        grid.setAdapter(adapter);
-        grid.setOnItemClickListener((parent, view, position, id) -> {
-            if (downloading) return;
-            String key = key(files.get(position));
-            if (!selected.remove(key)) selected.add(key);
-            adapter.notifyDataSetChanged();
-            updateButtons();
+        int widthDp = (int) (getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density);
+        int span = Math.max(3, (widthDp - 32) / 170);
+        GridLayoutManager glm = new GridLayoutManager(this, span);
+        glm.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
+            @Override
+            public int getSpanSize(int position) {
+                return rows.get(position) instanceof String ? span : 1;
+            }
         });
+        grid.setLayoutManager(glm);
+        grid.setAdapter(adapter);
 
         findViewById(R.id.btn_back).setOnClickListener(v -> onBackPressed());
+        selectButton.setOnClickListener(v -> setSelectMode(!selectMode));
         selectNewButton.setOnClickListener(v -> toggleSelectNew());
-        downloadButton.setOnClickListener(v -> startDownload());
+        downloadButton.setOnClickListener(v -> startDownload(selectedFiles(), false));
         findViewById(R.id.btn_cancel).setOnClickListener(v -> cancelDownload());
+
+        findViewById(R.id.viewer_close).setOnClickListener(v -> closeViewer());
+        findViewById(R.id.viewer_prev).setOnClickListener(v -> showViewer(viewerIndex - 1));
+        findViewById(R.id.viewer_next).setOnClickListener(v -> showViewer(viewerIndex + 1));
+        viewerDownload.setOnClickListener(v -> downloadFromViewer(false));
+        viewerOpen.setOnClickListener(v -> downloadFromViewer(true));
+        viewerPlay.setOnClickListener(v -> downloadFromViewer(true));
 
         updateButtons();
         connect();
@@ -170,12 +210,11 @@ public class MediaActivity extends Activity {
                     if (f != null && f.getMediaType() != MediaFile.MediaType.JSON) usable.add(f);
                 }
             }
-            // Newest first
             Collections.sort(usable, (a, b) -> Long.compare(b.getTimeCreated(), a.getTimeCreated()));
             ui(() -> {
                 files.clear();
                 files.addAll(usable);
-                adapter.notifyDataSetChanged();
+                rebuildRows();
                 if (files.isEmpty()) {
                     showMessage("No photos or videos on the drone's SD card.");
                 } else {
@@ -188,6 +227,33 @@ public class MediaActivity extends Activity {
         });
     }
 
+    /** Groups files under day headers, newest day first. */
+    private void rebuildRows() {
+        rows.clear();
+        String lastDay = null;
+        for (MediaFile f : files) {
+            String day = dayLabel(f.getTimeCreated());
+            if (!day.equals(lastDay)) {
+                rows.add(day);
+                lastDay = day;
+            }
+            rows.add(f);
+        }
+        adapter.notifyDataSetChanged();
+    }
+
+    private static String dayLabel(long millis) {
+        Calendar c = Calendar.getInstance();
+        Calendar today = Calendar.getInstance();
+        c.setTimeInMillis(millis);
+        if (c.get(Calendar.YEAR) == today.get(Calendar.YEAR)
+                && c.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)) return "Today";
+        today.add(Calendar.DAY_OF_YEAR, -1);
+        if (c.get(Calendar.YEAR) == today.get(Calendar.YEAR)
+                && c.get(Calendar.DAY_OF_YEAR) == today.get(Calendar.DAY_OF_YEAR)) return "Yesterday";
+        return DateFormat.getDateInstance(DateFormat.FULL).format(new Date(millis));
+    }
+
     private void loadThumbnails() {
         scheduler = mediaManager.getScheduler();
         if (scheduler == null) return;
@@ -197,40 +263,79 @@ public class MediaActivity extends Activity {
                 if (f.getThumbnail() != null) continue;
                 scheduler.moveTaskToEnd(new FetchMediaTask(f, FetchMediaTaskContent.THUMBNAIL,
                         (file, content, err) -> {
-                            if (err == null) ui(adapter::notifyDataSetChanged);
+                            if (err == null) ui(() -> notifyFile(file));
                         }));
             }
         });
     }
 
+    private void notifyFile(MediaFile f) {
+        int i = rows.indexOf(f);
+        if (i >= 0) adapter.notifyItemChanged(i);
+        if (viewerIndex >= 0 && viewerIndex < files.size() && files.get(viewerIndex) == f) bindViewerImage(f);
+    }
+
     // ---------------------------------------------------------------- selection
 
-    private void toggleSelectNew() {
-        Set<String> fresh = new HashSet<>();
-        for (MediaFile f : files) {
-            if (!saved.contains(key(f))) fresh.add(key(f));
-        }
-        if (!fresh.isEmpty() && selected.equals(fresh)) {
-            selected.clear();
-        } else {
-            selected.clear();
-            selected.addAll(fresh.isEmpty() ? allKeys() : fresh);
-        }
+    private void setSelectMode(boolean on) {
+        selectMode = on;
+        if (!on) selected.clear();
         adapter.notifyDataSetChanged();
         updateButtons();
     }
 
-    private Set<String> allKeys() {
-        Set<String> all = new HashSet<>();
-        for (MediaFile f : files) all.add(key(f));
-        return all;
+    private void toggleFile(MediaFile f) {
+        String k = key(f);
+        if (!selected.remove(k)) selected.add(k);
+        int i = rows.indexOf(f);
+        if (i >= 0) adapter.notifyItemChanged(i);
+        updateButtons();
+    }
+
+    private void toggleDay(String day) {
+        List<String> keys = new ArrayList<>();
+        for (MediaFile f : files) if (dayLabel(f.getTimeCreated()).equals(day)) keys.add(key(f));
+        boolean allSelected = selected.containsAll(keys);
+        if (allSelected) selected.removeAll(keys);
+        else selected.addAll(keys);
+        selectMode = true;
+        adapter.notifyDataSetChanged();
+        updateButtons();
+    }
+
+    private void toggleSelectNew() {
+        Set<String> fresh = new HashSet<>();
+        for (MediaFile f : files) if (!saved.contains(key(f))) fresh.add(key(f));
+        if (!fresh.isEmpty() && selected.equals(fresh)) {
+            selected.clear();
+        } else {
+            selected.clear();
+            if (fresh.isEmpty()) {
+                for (MediaFile f : files) selected.add(key(f));
+            } else {
+                selected.addAll(fresh);
+            }
+        }
+        selectMode = !selected.isEmpty();
+        adapter.notifyDataSetChanged();
+        updateButtons();
+    }
+
+    private List<MediaFile> selectedFiles() {
+        List<MediaFile> out = new ArrayList<>();
+        for (MediaFile f : files) if (selected.contains(key(f))) out.add(f);
+        return out;
     }
 
     private void updateButtons() {
         boolean ready = !files.isEmpty() && !downloading;
-        selectNewButton.setEnabled(ready);
-        selectNewButton.setAlpha(ready ? 1f : 0.4f);
+        for (Button b : new Button[]{selectNewButton, selectButton}) {
+            b.setEnabled(ready);
+            b.setAlpha(ready ? 1f : 0.4f);
+        }
+        selectButton.setText(selectMode ? "Done" : "Select");
         int n = selected.size();
+        downloadButton.setVisibility(n > 0 || !selectMode ? View.VISIBLE : View.GONE);
         downloadButton.setEnabled(ready && n > 0);
         downloadButton.setAlpha(ready && n > 0 ? 1f : 0.4f);
         downloadButton.setText(n > 0 ? "Download " + n : "Download");
@@ -242,25 +347,72 @@ public class MediaActivity extends Activity {
                 else photos++;
                 if (!saved.contains(key(f))) fresh++;
             }
-            setStatus(photos + " photos · " + videos + " videos · " + fresh + " not saved yet");
+            setStatus(selectMode ? (n + " selected") : (photos + " photos · " + videos + " videos · " + fresh + " new"));
             boolean allFreshSelected = fresh > 0 && selected.size() == fresh;
             selectNewButton.setText(fresh == 0 ? "Select all" : allFreshSelected ? "Clear" : "Select new");
         }
     }
 
+    // ---------------------------------------------------------------- viewer
+
+    private void showViewer(int index) {
+        if (index < 0 || index >= files.size()) return;
+        viewerIndex = index;
+        MediaFile f = files.get(index);
+        viewer.setVisibility(View.VISIBLE);
+        bindViewerImage(f);
+        boolean video = isVideo(f);
+        viewerPlay.setVisibility(video ? View.VISIBLE : View.GONE);
+        viewerOpen.setText(video ? "Download & play" : "Download & open");
+        viewerDownload.setText(saved.contains(key(f)) ? "Download again" : "Download");
+        String info = (index + 1) + " of " + files.size() + "  ·  " + f.getFileName() + "  ·  "
+                + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(new Date(f.getTimeCreated()))
+                + "  ·  " + sizeText(f.getFileSize());
+        if (video) info += "  ·  " + Units.duration((long) f.getDurationInSeconds());
+        if (saved.contains(key(f))) info += "  ·  saved";
+        viewerInfo.setText(info);
+        findViewById(R.id.viewer_prev).setAlpha(index > 0 ? 1f : 0.25f);
+        findViewById(R.id.viewer_next).setAlpha(index < files.size() - 1 ? 1f : 0.25f);
+
+        // Photos: ask the drone for a sharper preview image (jump the thumbnail queue).
+        if (!video && f.getPreview() == null && scheduler != null && !downloading) {
+            scheduler.moveTaskToNext(new FetchMediaTask(f, FetchMediaTaskContent.PREVIEW,
+                    (file, content, err) -> {
+                        if (err == null) ui(() -> notifyFile(file));
+                    }));
+        }
+    }
+
+    private void bindViewerImage(MediaFile f) {
+        Bitmap b = f.getPreview() != null ? f.getPreview() : f.getThumbnail();
+        viewerImage.setImageBitmap(b);
+    }
+
+    private void closeViewer() {
+        viewer.setVisibility(View.GONE);
+        viewerIndex = -1;
+    }
+
+    private void downloadFromViewer(boolean open) {
+        if (viewerIndex < 0 || downloading) return;
+        MediaFile f = files.get(viewerIndex);
+        closeViewer();
+        List<MediaFile> one = new ArrayList<>();
+        one.add(f);
+        startDownload(one, open);
+    }
+
     // ---------------------------------------------------------------- download
 
-    private void startDownload() {
-        if (selected.isEmpty() || mediaManager == null) return;
-        queue = new ArrayList<>();
-        // Download oldest first so the gallery keeps flight order.
-        for (int i = files.size() - 1; i >= 0; i--) {
-            if (selected.contains(key(files.get(i)))) queue.add(files.get(i));
-        }
+    private void startDownload(List<MediaFile> list, boolean openAfter) {
+        if (list.isEmpty() || mediaManager == null || downloading) return;
+        queue = new ArrayList<>(list);
+        Collections.reverse(queue); // oldest first so the gallery keeps flight order
         queueIndex = 0;
-        savedCount = 0;
+        savedUris.clear();
         failures.clear();
         cancelRequested = false;
+        openWhenDone = openAfter;
         downloading = true;
         progressRow.setVisibility(View.VISIBLE);
         updateButtons();
@@ -305,8 +457,8 @@ public class MediaActivity extends Activity {
                     File downloaded = findDownloaded(tempDir, baseName, path);
                     try {
                         if (downloaded == null) throw new java.io.IOException("downloaded file not found");
-                        GallerySaver.save(MediaActivity.this, downloaded);
-                        ui(() -> markSaved(file));
+                        Uri uri = GallerySaver.save(MediaActivity.this, downloaded);
+                        ui(() -> markSaved(file, uri));
                     } catch (Exception e) {
                         synchronized (failures) {
                             failures.add(file.getFileName() + ": " + e.getMessage());
@@ -357,24 +509,46 @@ public class MediaActivity extends Activity {
         current = null;
         progressRow.setVisibility(View.GONE);
         selected.clear();
+        selectMode = false;
         adapter.notifyDataSetChanged();
         updateButtons();
         if (scheduler != null) scheduler.resume(null);
 
-        String summary = savedCount + (savedCount == 1 ? " file" : " files")
+        if (openWhenDone && savedUris.size() == 1 && failures.isEmpty() && !cancelRequested) {
+            openUri(savedUris.get(0));
+            return;
+        }
+
+        int count = savedUris.size();
+        String summary = count + (count == 1 ? " file" : " files")
                 + " saved to your gallery in the \"" + GallerySaver.ALBUM + "\" album.";
         if (cancelRequested) summary = "Cancelled. " + summary;
         AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle("Download finished");
         if (failures.isEmpty()) {
             b.setMessage(summary);
         } else {
-            b.setMessage(summary + "\n\nNot saved:\n" + android.text.TextUtils.join("\n", failures));
+            b.setMessage(summary + "\n\nNot saved:\n" + TextUtils.join("\n", failures));
         }
-        b.setPositiveButton("OK", null);
-        if (savedCount > 0) {
+        b.setNegativeButton("OK", null);
+        if (count > 0) {
+            ArrayList<Uri> uris = new ArrayList<>(savedUris);
+            b.setPositiveButton("Send to Drive…", (d, w) ->
+                    FlightExport.shareUris(this, "Send to Google Drive", "*/*", uris));
             b.setNeutralButton("Open gallery", (d, w) -> openGallery());
         }
         b.show();
+    }
+
+    private void openUri(Uri uri) {
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW);
+            String mime = getContentResolver().getType(uri);
+            i.setDataAndType(uri, mime != null ? mime : "*/*");
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(i);
+        } catch (Exception e) {
+            openGallery();
+        }
     }
 
     private void openGallery() {
@@ -387,13 +561,13 @@ public class MediaActivity extends Activity {
         }
     }
 
-    private void markSaved(MediaFile f) {
-        savedCount++;
+    private void markSaved(MediaFile f, Uri uri) {
+        savedUris.add(uri);
         saved.add(key(f));
         SharedPreferences.Editor e = Prefs.raw(this).edit();
         e.putStringSet(SAVED_KEY, new HashSet<>(saved));
         e.apply();
-        adapter.notifyDataSetChanged();
+        notifyFile(f);
     }
 
     private static File findDownloaded(File dir, String baseName, String reportedPath) {
@@ -421,6 +595,14 @@ public class MediaActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (viewer.getVisibility() == View.VISIBLE) {
+            closeViewer();
+            return;
+        }
+        if (selectMode && !downloading) {
+            setSelectMode(false);
+            return;
+        }
         if (downloading) {
             new AlertDialog.Builder(this)
                     .setTitle("Stop downloading?")
@@ -470,6 +652,13 @@ public class MediaActivity extends Activity {
         });
     }
 
+    private static String sizeText(long bytes) {
+        if (bytes <= 0) return "";
+        if (bytes >= 1024L * 1024 * 1024) return String.format(Locale.US, "%.1f GB", bytes / 1073741824.0);
+        if (bytes >= 1024L * 1024) return String.format(Locale.US, "%.0f MB", bytes / 1048576.0);
+        return String.format(Locale.US, "%.0f KB", bytes / 1024.0);
+    }
+
     private static boolean isVideo(MediaFile f) {
         MediaFile.MediaType t = f.getMediaType();
         return t == MediaFile.MediaType.MP4 || t == MediaFile.MediaType.MOV;
@@ -485,29 +674,53 @@ public class MediaActivity extends Activity {
         return dot > 0 ? fileName.substring(0, dot) : fileName;
     }
 
-    private final class MediaAdapter extends BaseAdapter {
+    // ---------------------------------------------------------------- grid
+
+    private static final class Holder extends RecyclerView.ViewHolder {
+        Holder(View v) {
+            super(v);
+        }
+    }
+
+    private final class MediaAdapter extends RecyclerView.Adapter<Holder> {
         @Override
-        public int getCount() {
-            return files.size();
+        public int getItemViewType(int position) {
+            return rows.get(position) instanceof String ? TYPE_HEADER : TYPE_ITEM;
         }
 
         @Override
-        public MediaFile getItem(int position) {
-            return files.get(position);
+        public int getItemCount() {
+            return rows.size();
+        }
+
+        @NonNull
+        @Override
+        public Holder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            int layout = viewType == TYPE_HEADER ? R.layout.item_media_header : R.layout.item_media;
+            return new Holder(LayoutInflater.from(MediaActivity.this).inflate(layout, parent, false));
         }
 
         @Override
-        public long getItemId(int position) {
-            return position;
-        }
-
-        @Override
-        public View getView(int position, View convertView, ViewGroup parent) {
-            View v = convertView != null ? convertView
-                    : LayoutInflater.from(MediaActivity.this).inflate(R.layout.item_media, parent, false);
-            MediaFile f = getItem(position);
-            ImageView thumb = v.findViewById(R.id.thumb);
-            thumb.setImageBitmap(f.getThumbnail());
+        public void onBindViewHolder(@NonNull Holder h, int position) {
+            Object row = rows.get(position);
+            View v = h.itemView;
+            if (row instanceof String) {
+                String day = (String) row;
+                int count = 0, sel = 0;
+                for (MediaFile f : files) {
+                    if (dayLabel(f.getTimeCreated()).equals(day)) {
+                        count++;
+                        if (selected.contains(key(f))) sel++;
+                    }
+                }
+                ((TextView) v.findViewById(R.id.day)).setText(day + "  ·  " + count);
+                TextView selDay = v.findViewById(R.id.select_day);
+                selDay.setText(sel == count && count > 0 ? "Clear day" : "Select day");
+                selDay.setOnClickListener(x -> toggleDay(day));
+                return;
+            }
+            MediaFile f = (MediaFile) row;
+            ((ImageView) v.findViewById(R.id.thumb)).setImageBitmap(f.getThumbnail());
 
             TextView badge = v.findViewById(R.id.badge);
             if (isVideo(f)) {
@@ -523,7 +736,18 @@ public class MediaActivity extends Activity {
             v.findViewById(R.id.selected_overlay).setVisibility(isSelected ? View.VISIBLE : View.GONE);
             v.findViewById(R.id.check).setVisibility(isSelected ? View.VISIBLE : View.GONE);
             v.findViewById(R.id.saved).setVisibility(saved.contains(key(f)) ? View.VISIBLE : View.GONE);
-            return v;
+
+            v.setOnClickListener(x -> {
+                if (downloading) return;
+                if (selectMode) toggleFile(f);
+                else showViewer(files.indexOf(f));
+            });
+            v.setOnLongClickListener(x -> {
+                if (downloading) return true;
+                selectMode = true;
+                toggleFile(f);
+                return true;
+            });
         }
     }
 }

@@ -67,6 +67,8 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
     };
 
     private TextView modeToggle;
+    private View closePanelsButton;
+    private int edgeInset;
     private View simpleHud;
     private TextView hudAlt, hudDist, hudSpeed, hudVSpeed, hudTime;
     private boolean advanced;
@@ -122,11 +124,66 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
         hudTime = findViewById(R.id.hud_time);
         modeToggle = findViewById(R.id.mode_toggle);
         findViewById(R.id.btn_home).setOnClickListener(v -> finish());
+        applyEdgeInsets();
+        closePanelsButton = findViewById(R.id.btn_close_panels);
+        closePanelsButton.setOnClickListener(v -> closeAllPanels());
+        parentView.getViewTreeObserver().addOnGlobalLayoutListener(this::updateCloseButton);
         enlargeCameraMenus();
         modeToggle.setOnClickListener(v -> {
             Prefs.setAdvanced(this, !advanced);
             applyMode();
         });
+    }
+
+    /**
+     * Keeps the buttons away from the phone's edges (where they're hard to tap, especially
+     * without a case) while the live video still fills the whole screen.
+     */
+    private void applyEdgeInsets() {
+        edgeInset = DensityUtil.dip2px(this, 28);
+        parentView.setPadding(edgeInset, 0, edgeInset, 0);
+        for (int id : new int[]{R.id.fpv_container, R.id.fpv_overlay_widget}) {
+            View v = findViewById(id);
+            RelativeLayout.LayoutParams lp = (RelativeLayout.LayoutParams) v.getLayoutParams();
+            lp.leftMargin = -edgeInset;
+            lp.rightMargin = -edgeInset;
+            v.setLayoutParams(lp);
+        }
+    }
+
+    private boolean anyPanelOpen() {
+        for (int id : new int[]{R.id.camera_setting_exposure_panel, R.id.camera_setting_advanced_panel,
+                R.id.pre_flight_check_list, R.id.rtk_panel, R.id.spotlight_panel, R.id.speaker_panel}) {
+            View v = findViewById(id);
+            if (v != null && v.getVisibility() == View.VISIBLE) return true;
+        }
+        return false;
+    }
+
+    private void updateCloseButton() {
+        if (closePanelsButton == null) return;
+        int want = anyPanelOpen() ? View.VISIBLE : View.GONE;
+        if (closePanelsButton.getVisibility() != want) closePanelsButton.setVisibility(want);
+    }
+
+    private void closeAllPanels() {
+        controlsWidget.setAdvancedPanelVisibility(false);
+        controlsWidget.setExposurePanelVisibility(false);
+        for (int id : new int[]{R.id.camera_setting_exposure_panel, R.id.camera_setting_advanced_panel,
+                R.id.pre_flight_check_list, R.id.rtk_panel, R.id.spotlight_panel, R.id.speaker_panel}) {
+            View v = findViewById(id);
+            if (v != null) v.setVisibility(View.GONE);
+        }
+        updateCloseButton();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (anyPanelOpen()) {
+            closeAllPanels();
+            return;
+        }
+        super.onBackPressed();
     }
 
     /** DJI draws its camera menus for tablets; scale them up so the text is readable on a phone. */
@@ -186,7 +243,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
         if (view == fpvWidget && !isMapMini) {
             resizeFPVWidget(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT, 0, 0);
             reorderCameraCapturePanel();
-            ResizeAnimation mapViewAnimation = new ResizeAnimation(mapWidget, deviceWidth, deviceHeight, width, height, margin);
+            ResizeAnimation mapViewAnimation = new ResizeAnimation(mapWidget, deviceWidth - 2 * edgeInset, deviceHeight, width, height, margin);
             mapWidget.startAnimation(mapViewAnimation);
             isMapMini = true;
             mapWidget.setMini(true);
@@ -194,7 +251,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
             hidePanels();
             resizeFPVWidget(width, height, margin, 12);
             reorderCameraCapturePanel();
-            ResizeAnimation mapViewAnimation = new ResizeAnimation(mapWidget, width, height, deviceWidth, deviceHeight, 0);
+            ResizeAnimation mapViewAnimation = new ResizeAnimation(mapWidget, width, height, deviceWidth - 2 * edgeInset, deviceHeight, 0);
             mapWidget.startAnimation(mapViewAnimation);
             isMapMini = false;
             mapWidget.setMini(false);
@@ -205,7 +262,9 @@ public class FlyActivity extends Activity implements Telemetry.Listener {
         RelativeLayout.LayoutParams fpvParams = (RelativeLayout.LayoutParams) primaryVideoView.getLayoutParams();
         fpvParams.height = height;
         fpvParams.width = width;
-        fpvParams.rightMargin = margin;
+        boolean full = width == RelativeLayout.LayoutParams.MATCH_PARENT;
+        fpvParams.rightMargin = full ? -edgeInset : margin;
+        fpvParams.leftMargin = full ? -edgeInset : 0;
         fpvParams.bottomMargin = margin;
         if (isMapMini) {
             fpvParams.addRule(RelativeLayout.CENTER_IN_PARENT, 0);

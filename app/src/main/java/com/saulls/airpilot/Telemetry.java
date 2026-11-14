@@ -36,6 +36,16 @@ public final class Telemetry {
         public double homeLat = Double.NaN, homeLng = Double.NaN;
         /** Heading in degrees, 0 = north, clockwise. */
         public double yaw = Double.NaN;
+        public double pitch = Double.NaN, roll = Double.NaN;
+        public String flightMode = "";
+        public int gpsLevel = -1;
+        public double vpsHeightM = Double.NaN;
+        public boolean compassError;
+        public boolean maxHeightReached, maxRadiusReached;
+        public boolean lowBattery, criticalBattery;
+        public int batteryPct = -1;
+        public double batteryVolts = Double.NaN;
+        public double batteryTempC = Double.NaN;
     }
 
     public interface Listener {
@@ -48,6 +58,9 @@ public final class Telemetry {
     private final CopyOnWriteArrayList<Listener> listeners = new CopyOnWriteArrayList<>();
     private final FlightRecorder recorder;
     private FlightController attachedTo;
+    private dji.sdk.battery.Battery batteryAttached;
+    private volatile int batteryPct = -1;
+    private volatile double batteryVolts = Double.NaN, batteryTempC = Double.NaN;
     private volatile Snapshot last = new Snapshot();
 
     private Telemetry(Context context) {
@@ -75,9 +88,20 @@ public final class Telemetry {
     /** Hooks onto the connected aircraft's flight controller. Safe to call repeatedly. */
     public synchronized void attach() {
         FlightController fc = flightController();
-        if (fc == null || fc == attachedTo) return;
-        attachedTo = fc;
-        fc.setStateCallback(this::onState);
+        if (fc != null && fc != attachedTo) {
+            attachedTo = fc;
+            fc.setStateCallback(this::onState);
+        }
+        BaseProduct product = DJISDKManager.getInstance().getProduct();
+        dji.sdk.battery.Battery battery = product != null && product.isConnected() ? product.getBattery() : null;
+        if (battery != null && battery != batteryAttached) {
+            batteryAttached = battery;
+            battery.setStateCallback(b -> {
+                batteryPct = b.getChargeRemainingInPercent();
+                batteryVolts = b.getVoltage() / 1000.0;
+                batteryTempC = b.getTemperature();
+            });
+        }
     }
 
     public static FlightController flightController() {
@@ -117,7 +141,23 @@ public final class Telemetry {
         s.satellites = state.getSatelliteCount();
         s.flying = state.isFlying();
         s.goingHome = state.isGoingHome();
-        if (state.getAttitude() != null) s.yaw = state.getAttitude().yaw;
+        if (state.getAttitude() != null) {
+            s.yaw = state.getAttitude().yaw;
+            s.pitch = state.getAttitude().pitch;
+            s.roll = state.getAttitude().roll;
+        }
+        s.flightMode = state.getFlightModeString() == null ? "" : state.getFlightModeString();
+        s.gpsLevel = gpsLevel(state.getGPSSignalLevel());
+        if (state.isUltrasonicBeingUsed()) s.vpsHeightM = state.getUltrasonicHeightInMeters();
+        s.maxHeightReached = state.hasReachedMaxFlightHeight();
+        s.maxRadiusReached = state.hasReachedMaxFlightRadius();
+        s.lowBattery = state.isLowerThanBatteryWarningThreshold();
+        s.criticalBattery = state.isLowerThanSeriousBatteryWarningThreshold();
+        FlightController fc = attachedTo;
+        if (fc != null && fc.getCompass() != null) s.compassError = fc.getCompass().hasError();
+        s.batteryPct = batteryPct;
+        s.batteryVolts = batteryVolts;
+        s.batteryTempC = batteryTempC;
 
         LocationCoordinate2D home = state.getHomeLocation();
         recorder.update(s, state.isHomeLocationSet() && home != null ? home.getLatitude() : Double.NaN,
@@ -127,6 +167,19 @@ public final class Telemetry {
         main.post(() -> {
             for (Listener l : listeners) l.onTelemetry(s);
         });
+    }
+
+    /** 0-5 like DJI's bars, or -1 when there's no GPS at all. */
+    private static int gpsLevel(dji.common.flightcontroller.GPSSignalLevel level) {
+        if (level == null) return -1;
+        String n = level.name();
+        if (n.startsWith("LEVEL_")) {
+            try {
+                return Integer.parseInt(n.substring(6));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return -1;
     }
 
     private static boolean valid(double lat, double lng) {

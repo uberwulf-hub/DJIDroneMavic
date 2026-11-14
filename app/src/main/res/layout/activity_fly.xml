@@ -6,6 +6,8 @@
                 android:layout_height="match_parent"
                 android:background="@color/background_blue"
                 android:id="@+id/root_view"
+                android:clipToPadding="false"
+                android:clipChildren="false"
                 tools:context=".FlyActivity">
 
     <!-- Widget to see first person view (FPV) -->
@@ -471,5 +473,25 @@
         android:layout_centerHorizontal="true"
         android:visibility="gone"
         />
+
+    <!-- Shown whenever a DJI menu/panel is open, so it can always be closed -->
+    <TextView
+        android:id="@+id/btn_close_panels"
+        android:layout_width="wrap_content"
+        android:layout_height="44dp"
+        android:layout_below="@id/signal"
+        android:layout_alignParentRight="true"
+        android:layout_marginTop="24dp"
+        android:layout_marginRight="300dp"
+        android:background="@drawable/pill_bg"
+        android:gravity="center"
+        android:paddingLeft="18dp"
+        android:paddingRight="18dp"
+        android:text="\u2715  Close menu"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        tools:ignore="RtlHardcoded" />
 
 </RelativeLayout>
