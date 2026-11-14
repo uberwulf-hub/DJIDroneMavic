@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background_blue"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingLeft="8dp"
+        android:paddingRight="16dp">
+
+        <Button
+            android:id="@+id/btn_back"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:background="@android:color/transparent"
+            android:text="‹ Back"
+            android:textAllCaps="false"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Safety &amp; Settings"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/drone_state"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#B3FFFFFF"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingLeft="24dp"
+            android:paddingRight="24dp"
+            android:paddingBottom="24dp">
+
+            <!-- ===== App ===== -->
+            <TextView style="@style/SectionTitle" android:text="APP" />
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView style="@style/SettingLabel" android:text="Pro mode (all camera controls)" />
+                <Switch android:id="@+id/sw_advanced" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView style="@style/SettingLabel" android:text="Imperial units (ft, mph)" />
+                <Switch android:id="@+id/sw_imperial" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView style="@style/SettingLabel" android:text="Grid lines on video" />
+                <Switch android:id="@+id/sw_grid" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <!-- ===== Drone ===== -->
+            <TextView style="@style/SectionTitle" android:text="DRONE SAFETY  (saved to the drone)" />
+            <TextView
+                android:id="@+id/drone_hint"
+                style="@style/SettingHint"
+                android:text="Connect the drone to read and change these." />
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView style="@style/SettingLabel" android:text="Beginner mode" />
+                <Switch android:id="@+id/sw_beginner" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+            </LinearLayout>
+            <TextView style="@style/SettingHint" android:text="Keeps the drone close and low (about 30 m / 100 ft) and slow. Needs GPS." />
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView android:id="@+id/lbl_max_alt" style="@style/SettingLabel" android:text="Max altitude" />
+                <EditText android:id="@+id/et_max_alt" style="@style/SettingNumber" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView style="@style/SettingLabel" android:text="Limit distance from home" />
+                <Switch android:id="@+id/sw_dist_limit" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView android:id="@+id/lbl_max_dist" style="@style/SettingLabel" android:text="Max distance" />
+                <EditText android:id="@+id/et_max_dist" style="@style/SettingNumber" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView android:id="@+id/lbl_rth_alt" style="@style/SettingLabel" android:text="Return-to-home altitude" />
+                <EditText android:id="@+id/et_rth_alt" style="@style/SettingNumber" />
+            </LinearLayout>
+            <TextView style="@style/SettingHint" android:text="Set it higher than nearby trees and buildings." />
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView style="@style/SettingLabel" android:text="Low battery warning (%)" />
+                <EditText android:id="@+id/et_low_batt" style="@style/SettingNumber" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btn_save_drone"
+                style="@style/BigButton"
+                android:layout_marginTop="16dp"
+                android:text="Save to drone" />
+
+            <TextView
+                android:id="@+id/save_result"
+                style="@style/SettingHint"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

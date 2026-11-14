@@ -11,7 +11,9 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
+import java.text.DateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -80,6 +82,8 @@ public class MainActivity extends Activity {
 
         // Always allowed, so you can look at the fly screen without a drone.
         flyButton.setOnClickListener(v -> openFlyScreen());
+        findViewById(R.id.btn_log).setOnClickListener(v -> startActivity(new Intent(this, FlightLogActivity.class)));
+        findViewById(R.id.btn_settings).setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
 
         if (!hasApiKey()) {
             sdkStatus.setText("No DJI App Key in this build.\nAdd the DJI_API_KEY secret on GitHub and rebuild.");
@@ -97,6 +101,7 @@ public class MainActivity extends Activity {
         super.onResume();
         resumed = true;
         refreshProductStatus();
+        refreshSummary();
     }
 
     @Override
@@ -110,6 +115,22 @@ public class MainActivity extends Activity {
         DJISDKManager.getInstance().destroy();
         isAppStarted = false;
         super.onDestroy();
+    }
+
+    private void refreshSummary() {
+        ((TextView) findViewById(R.id.mode_hint)).setText(Prefs.isAdvanced(this)
+                ? "Opens in Pro mode" : "Opens in Simple mode");
+        List<FlightRecorder.Flight> flights = FlightRecorder.load(this);
+        TextView last = findViewById(R.id.last_flight);
+        if (flights.isEmpty()) {
+            last.setText("");
+        } else {
+            FlightRecorder.Flight f = flights.get(0);
+            boolean imperial = Prefs.isImperial(this);
+            last.setText("Last flight: " + DateFormat.getDateInstance(DateFormat.MEDIUM).format(new Date(f.startMillis))
+                    + "  ·  " + Units.duration(f.durationS)
+                    + "  ·  " + Units.distance(f.maxDistanceM, imperial) + " away");
+        }
     }
 
     private boolean hasApiKey() {
@@ -224,6 +245,7 @@ public class MainActivity extends Activity {
             if (product != null && product.isConnected()) {
                 String name = product.getModel() == null ? "DJI aircraft" : product.getModel().getDisplayName();
                 productStatus.setText("Connected: " + name);
+                Telemetry.get(MainActivity.this).attach();
                 // Jump straight to the fly screen the first time the drone shows up.
                 if (!autoOpenedFly && resumed && product.getModel() != null) {
                     autoOpenedFly = true;

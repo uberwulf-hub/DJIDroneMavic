@@ -1,0 +1,229 @@
+package com.saulls.airpilot;
+
+import android.app.Activity;
+import android.os.Bundle;
+import android.text.TextUtils;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.Switch;
+import android.widget.TextView;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import dji.common.error.DJIError;
+import dji.common.util.CommonCallbacks;
+import dji.sdk.flightcontroller.FlightController;
+
+/** App preferences plus the drone's own safety limits. */
+public class SettingsActivity extends Activity {
+
+    // DJI's allowed ranges, in meters / percent.
+    private static final int ALT_MIN = 20, ALT_MAX = 500;
+    private static final int DIST_MIN = 15, DIST_MAX = 8000;
+    private static final int RTH_MIN = 20, RTH_MAX = 500;
+    private static final int BATT_MIN = 15, BATT_MAX = 50;
+
+    private Switch swAdvanced, swImperial, swGrid, swBeginner, swDistLimit;
+    private EditText etMaxAlt, etMaxDist, etRthAlt, etLowBatt;
+    private TextView droneState, droneHint, saveResult;
+    private Button saveButton;
+    private boolean imperial;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_settings);
+
+        swAdvanced = findViewById(R.id.sw_advanced);
+        swImperial = findViewById(R.id.sw_imperial);
+        swGrid = findViewById(R.id.sw_grid);
+        swBeginner = findViewById(R.id.sw_beginner);
+        swDistLimit = findViewById(R.id.sw_dist_limit);
+        etMaxAlt = findViewById(R.id.et_max_alt);
+        etMaxDist = findViewById(R.id.et_max_dist);
+        etRthAlt = findViewById(R.id.et_rth_alt);
+        etLowBatt = findViewById(R.id.et_low_batt);
+        droneState = findViewById(R.id.drone_state);
+        droneHint = findViewById(R.id.drone_hint);
+        saveResult = findViewById(R.id.save_result);
+        saveButton = findViewById(R.id.btn_save_drone);
+
+        findViewById(R.id.btn_back).setOnClickListener(v -> finish());
+
+        imperial = Prefs.isImperial(this);
+        swAdvanced.setChecked(Prefs.isAdvanced(this));
+        swImperial.setChecked(imperial);
+        swGrid.setChecked(Prefs.isGrid(this));
+        swAdvanced.setOnCheckedChangeListener((b, on) -> Prefs.setAdvanced(this, on));
+        swGrid.setOnCheckedChangeListener((b, on) -> Prefs.setGrid(this, on));
+        swImperial.setOnCheckedChangeListener((b, on) -> switchUnits(on));
+        swDistLimit.setOnCheckedChangeListener((b, on) -> etMaxDist.setEnabled(on));
+
+        updateUnitLabels();
+        saveButton.setOnClickListener(v -> saveToDrone());
+        loadFromDrone();
+    }
+
+    private void updateUnitLabels() {
+        String u = Units.lengthUnit(imperial);
+        ((TextView) findViewById(R.id.lbl_max_alt)).setText("Max altitude (" + u + ")");
+        ((TextView) findViewById(R.id.lbl_max_dist)).setText("Max distance (" + u + ")");
+        ((TextView) findViewById(R.id.lbl_rth_alt)).setText("Return-to-home altitude (" + u + ")");
+    }
+
+    /** Converts the numbers already typed so they keep meaning the same distance. */
+    private void switchUnits(boolean toImperial) {
+        for (EditText et : new EditText[]{etMaxAlt, etMaxDist, etRthAlt}) {
+            Integer meters = readMeters(et);
+            if (meters != null) et.setText(String.valueOf(Units.fromMeters(meters, toImperial)));
+        }
+        imperial = toImperial;
+        Prefs.setImperial(this, toImperial);
+        updateUnitLabels();
+    }
+
+    private void setDroneControlsEnabled(boolean enabled) {
+        for (android.view.View v : new android.view.View[]{swBeginner, swDistLimit, etMaxAlt, etMaxDist, etRthAlt, etLowBatt, saveButton}) {
+            v.setEnabled(enabled);
+            v.setAlpha(enabled ? 1f : 0.4f);
+        }
+        if (enabled) etMaxDist.setEnabled(swDistLimit.isChecked());
+    }
+
+    private void loadFromDrone() {
+        FlightController fc = Telemetry.flightController();
+        if (fc == null) {
+            droneState.setText("Drone not connected");
+            droneHint.setVisibility(android.view.View.VISIBLE);
+            setDroneControlsEnabled(false);
+            return;
+        }
+        droneState.setText("Drone connected");
+        droneHint.setVisibility(android.view.View.GONE);
+        setDroneControlsEnabled(true);
+
+        fc.getNoviceModeEnabled(callback(v -> swBeginner.setChecked(v)));
+        fc.getMaxFlightHeight(callback(v -> etMaxAlt.setText(String.valueOf(Units.fromMeters(v, imperial)))));
+        fc.getMaxFlightRadiusLimitationEnabled(callback(v -> {
+            swDistLimit.setChecked(v);
+            etMaxDist.setEnabled(v);
+        }));
+        fc.getMaxFlightRadius(callback(v -> etMaxDist.setText(String.valueOf(Units.fromMeters(v, imperial)))));
+        fc.getGoHomeHeightInMeters(callback(v -> etRthAlt.setText(String.valueOf(Units.fromMeters(v, imperial)))));
+        fc.getLowBatteryWarningThreshold(callback(v -> etLowBatt.setText(String.valueOf(v))));
+    }
+
+    private interface Consumer<T> {
+        void accept(T t);
+    }
+
+    private <T> CommonCallbacks.CompletionCallbackWith<T> callback(Consumer<T> onValue) {
+        return new CommonCallbacks.CompletionCallbackWith<T>() {
+            @Override
+            public void onSuccess(T value) {
+                runOnUiThread(() -> onValue.accept(value));
+            }
+
+            @Override
+            public void onFailure(DJIError error) {
+                // Not every drone supports every setting; leave the field as it is.
+            }
+        };
+    }
+
+    private Integer readMeters(EditText et) {
+        String t = et.getText().toString().trim();
+        if (TextUtils.isEmpty(t)) return null;
+        try {
+            return Units.toMeters(Double.parseDouble(t), imperial);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Integer readInt(EditText et) {
+        try {
+            return Integer.parseInt(et.getText().toString().trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private String rangeText(int minM, int maxM) {
+        return Units.fromMeters(minM, imperial) + "–" + Units.fromMeters(maxM, imperial) + " " + Units.lengthUnit(imperial);
+    }
+
+    private void saveToDrone() {
+        FlightController fc = Telemetry.flightController();
+        if (fc == null) {
+            saveResult.setText("Drone not connected.");
+            return;
+        }
+        Integer alt = readMeters(etMaxAlt);
+        Integer dist = readMeters(etMaxDist);
+        Integer rth = readMeters(etRthAlt);
+        Integer batt = readInt(etLowBatt);
+
+        List<String> problems = new ArrayList<>();
+        if (alt != null && (alt < ALT_MIN || alt > ALT_MAX)) problems.add("Max altitude must be " + rangeText(ALT_MIN, ALT_MAX));
+        if (swDistLimit.isChecked() && dist != null && (dist < DIST_MIN || dist > DIST_MAX)) problems.add("Max distance must be " + rangeText(DIST_MIN, DIST_MAX));
+        if (rth != null && (rth < RTH_MIN || rth > RTH_MAX)) problems.add("Return-to-home altitude must be " + rangeText(RTH_MIN, RTH_MAX));
+        if (rth != null && alt != null && rth > alt) problems.add("Return-to-home altitude can't be above max altitude");
+        if (batt != null && (batt < BATT_MIN || batt > BATT_MAX)) problems.add("Low battery warning must be " + BATT_MIN + "–" + BATT_MAX + "%");
+        if (!problems.isEmpty()) {
+            saveResult.setText(TextUtils.join("\n", problems));
+            return;
+        }
+
+        saveResult.setText("Saving…");
+        List<String> failures = new ArrayList<>();
+        AtomicInteger pending = new AtomicInteger(1); // released after all calls are queued
+
+        Runnable done = () -> runOnUiThread(() -> {
+            if (failures.isEmpty()) {
+                saveResult.setText("Saved to drone ✓");
+            } else {
+                saveResult.setText("Some settings were not saved:\n" + TextUtils.join("\n", failures));
+            }
+            loadFromDrone();
+        });
+
+        Consumer<CallbackSetter> run = setter -> {
+            pending.incrementAndGet();
+            setter.call(error -> {
+                if (error != null) {
+                    synchronized (failures) {
+                        failures.add(setter.name + ": " + error.getDescription());
+                    }
+                }
+                if (pending.decrementAndGet() == 0) done.run();
+            });
+        };
+
+        run.accept(new CallbackSetter("Beginner mode", cb -> fc.setNoviceModeEnabled(swBeginner.isChecked(), cb)));
+        if (alt != null) run.accept(new CallbackSetter("Max altitude", cb -> fc.setMaxFlightHeight(alt, cb)));
+        run.accept(new CallbackSetter("Distance limit", cb -> fc.setMaxFlightRadiusLimitationEnabled(swDistLimit.isChecked(), cb)));
+        if (swDistLimit.isChecked() && dist != null) run.accept(new CallbackSetter("Max distance", cb -> fc.setMaxFlightRadius(dist, cb)));
+        if (rth != null) run.accept(new CallbackSetter("Return-to-home altitude", cb -> fc.setGoHomeHeightInMeters(rth, cb)));
+        if (batt != null) run.accept(new CallbackSetter("Low battery warning", cb -> fc.setLowBatteryWarningThreshold(batt, cb)));
+
+        if (pending.decrementAndGet() == 0) done.run();
+    }
+
+    /** A named drone setting write, so failures can say which one went wrong. */
+    private static final class CallbackSetter {
+        final String name;
+        final Consumer<CommonCallbacks.CompletionCallback<DJIError>> action;
+
+        CallbackSetter(String name, Consumer<CommonCallbacks.CompletionCallback<DJIError>> action) {
+            this.name = name;
+            this.action = action;
+        }
+
+        void call(CommonCallbacks.CompletionCallback<DJIError> cb) {
+            action.accept(cb);
+        }
+    }
+}

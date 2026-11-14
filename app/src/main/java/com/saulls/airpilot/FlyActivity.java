@@ -12,6 +12,7 @@ import android.view.animation.Animation;
 import android.view.animation.Transformation;
 import android.widget.FrameLayout;
 import android.widget.RelativeLayout;
+import android.widget.TextView;
 
 import com.dji.mapkit.core.maps.DJIMap;
 
@@ -37,7 +38,7 @@ import dji.ux.widget.controls.LensControlWidget;
 /**
  * Activity that shows all the UI elements together
  */
-public class FlyActivity extends Activity {
+public class FlyActivity extends Activity implements Telemetry.Listener {
 
     private MapWidget mapWidget;
     private ViewGroup parentView;
@@ -61,6 +62,18 @@ public class FlyActivity extends Activity {
     private LensControlWidget lensControlWidget;
     private ThermalPaletteWidget thermalPaletteWidget;
 
+
+    // Views that only show in Advanced (Pro) mode
+    private static final int[] ADVANCED_ONLY = {
+            R.id.camera, R.id.camera2, R.id.manual_focus, R.id.camera_lens_control,
+            R.id.expose_switch, R.id.dashboard_widget
+    };
+
+    private TextView modeToggle;
+    private View simpleHud;
+    private TextView hudAlt, hudDist, hudSpeed, hudVSpeed, hudTime;
+    private boolean advanced;
+    private boolean imperial;
 
     private int height;
     private int width;
@@ -101,6 +114,45 @@ public class FlyActivity extends Activity {
 
         fpvWidget.setCameraIndexListener((cameraIndex, lensIndex) -> cameraWidgetKeyIndexUpdated(fpvWidget.getCameraKeyIndex(), fpvWidget.getLensKeyIndex()));
         updateSecondaryVideoVisibility();
+
+        // Never let the screen sleep while flying.
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        simpleHud = findViewById(R.id.simple_hud);
+        hudAlt = findViewById(R.id.hud_alt);
+        hudDist = findViewById(R.id.hud_dist);
+        hudSpeed = findViewById(R.id.hud_speed);
+        hudVSpeed = findViewById(R.id.hud_vspeed);
+        hudTime = findViewById(R.id.hud_time);
+        modeToggle = findViewById(R.id.mode_toggle);
+        modeToggle.setOnClickListener(v -> {
+            Prefs.setAdvanced(this, !advanced);
+            applyMode();
+        });
+    }
+
+    /** Shows or hides the pro camera controls. Hidden views keep their space so nothing jumps around. */
+    private void applyMode() {
+        advanced = Prefs.isAdvanced(this);
+        for (int id : ADVANCED_ONLY) {
+            View v = findViewById(id);
+            if (v != null) v.setVisibility(advanced ? View.VISIBLE : View.INVISIBLE);
+        }
+        simpleHud.setVisibility(advanced ? View.GONE : View.VISIBLE);
+        modeToggle.setText(advanced ? "PRO  \u25B8 Simple" : "SIMPLE  \u25B8 Pro");
+        if (!advanced) {
+            controlsWidget.setAdvancedPanelVisibility(false);
+            controlsWidget.setExposurePanelVisibility(false);
+        }
+    }
+
+    @Override
+    public void onTelemetry(Telemetry.Snapshot s) {
+        hudAlt.setText(Units.distance(s.altitudeM, imperial));
+        hudDist.setText(Units.distance(s.distanceM, imperial));
+        hudSpeed.setText(Units.speed(s.horizontalSpeedMps, imperial));
+        hudVSpeed.setText(Units.speed(s.verticalSpeedMps, imperial));
+        hudTime.setText(s.flying || s.flightTimeS > 0 ? Units.duration(s.flightTimeS) : "--");
     }
 
     private void initCameraView() {
@@ -231,10 +283,21 @@ public class FlyActivity extends Activity {
                 | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
 
         mapWidget.onResume();
+
+        imperial = Prefs.isImperial(this);
+        applyMode();
+        fpvOverlayWidget.setGridOverlayEnabled(Prefs.isGrid(this));
+        if (Prefs.isGrid(this)) {
+            fpvOverlayWidget.setCurrentGridOverlayType(FPVOverlayWidget.GridOverlayType.PARALLEL);
+        }
+        Telemetry telemetry = Telemetry.get(this);
+        telemetry.attach();
+        telemetry.addListener(this);
     }
 
     @Override
     protected void onPause() {
+        Telemetry.get(this).removeListener(this);
         mapWidget.onPause();
         super.onPause();
     }

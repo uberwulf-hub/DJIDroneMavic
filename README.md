@@ -6,6 +6,18 @@ A clean, ad-free Android flight app for DJI drones, built on DJI Mobile SDK v4 /
 The app opens to a start screen that registers with DJI and waits for the drone. When the drone connects it
 goes straight to the fly screen: live video, telemetry, takeoff/land, return home and camera controls.
 
+## Features
+
+- **Simple mode (default):** live video, a big altitude / distance / speed / flight-time readout,
+  takeoff, return home, shutter and the status bar. Nothing else in the way.
+- **Pro mode:** one tap on the SIMPLE/PRO pill brings back ISO, shutter, aperture, EV, white balance,
+  focus, lens controls and DJI's full dashboard.
+- **Flight log:** every flight is recorded automatically (time, duration, max height, distance, speed).
+  Tap a flight to open its takeoff spot in Maps.
+- **Safety & Settings:** beginner mode, max altitude, distance limit, return-to-home altitude and
+  low-battery warning, saved straight to the drone. Plus units (ft/m), grid lines and default mode.
+- Screen stays awake while the fly screen is open.
+
 ## One-time setup
 
 1. **DJI App Key.** At developer.dji.com go to Apps, then Create App. Choose Mobile SDK and enter the package

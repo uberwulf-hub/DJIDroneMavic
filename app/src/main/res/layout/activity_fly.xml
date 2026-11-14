@@ -155,6 +155,7 @@
             android:layout_height="35dp"/>
     </LinearLayout>
     <dji.ux.widget.ManualFocusWidget
+        android:id="@+id/manual_focus"
         android:layout_alignTop="@+id/camera2"
         android:layout_toLeftOf="@+id/camera2"
         
@@ -389,5 +390,68 @@
         android:visibility="gone"
         />
 
+    <!-- ===== Air Pilot additions (keep at the end: FlyActivity reorders views by index) ===== -->
+
+    <!-- Simple-mode readout: big, glanceable numbers -->
+    <LinearLayout
+        android:id="@+id/simple_hud"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentLeft="true"
+        android:layout_marginLeft="12dp"
+        android:layout_marginBottom="12dp"
+        android:background="@drawable/hud_bg"
+        android:orientation="horizontal"
+        android:paddingLeft="6dp"
+        android:paddingRight="6dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        tools:ignore="RtlHardcoded">
+
+        <LinearLayout style="@style/HudCell">
+            <TextView style="@style/HudLabel" android:text="ALT" />
+            <TextView android:id="@+id/hud_alt" style="@style/HudValue" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/HudCell">
+            <TextView style="@style/HudLabel" android:text="DIST" />
+            <TextView android:id="@+id/hud_dist" style="@style/HudValue" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/HudCell">
+            <TextView style="@style/HudLabel" android:text="SPEED" />
+            <TextView android:id="@+id/hud_speed" style="@style/HudValue" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/HudCell">
+            <TextView style="@style/HudLabel" android:text="V.SPEED" />
+            <TextView android:id="@+id/hud_vspeed" style="@style/HudValue" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/HudCell">
+            <TextView style="@style/HudLabel" android:text="FLIGHT" />
+            <TextView android:id="@+id/hud_time" style="@style/HudValue" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Simple / Pro switch -->
+    <TextView
+        android:id="@+id/mode_toggle"
+        android:layout_width="wrap_content"
+        android:layout_height="32dp"
+        android:layout_below="@id/signal"
+        android:layout_alignParentLeft="true"
+        android:layout_marginLeft="12dp"
+        android:layout_marginTop="28dp"
+        android:background="@drawable/pill_bg"
+        android:gravity="center"
+        android:paddingLeft="14dp"
+        android:paddingRight="14dp"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        tools:ignore="RtlHardcoded"
+        tools:text="SIMPLE" />
 
 </RelativeLayout>
