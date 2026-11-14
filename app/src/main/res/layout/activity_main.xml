@@ -81,9 +81,15 @@
             android:textSize="12sp" />
 
         <Button
-            android:id="@+id/btn_log"
+            android:id="@+id/btn_media"
             style="@style/SecondaryButton"
             android:layout_marginTop="16dp"
+            android:text="Photos &amp; Videos" />
+
+        <Button
+            android:id="@+id/btn_log"
+            style="@style/SecondaryButton"
+            android:layout_marginTop="12dp"
             android:text="Flight Log" />
 
         <Button

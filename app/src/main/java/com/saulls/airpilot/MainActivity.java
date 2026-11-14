@@ -82,6 +82,7 @@ public class MainActivity extends Activity {
 
         // Always allowed, so you can look at the fly screen without a drone.
         flyButton.setOnClickListener(v -> openFlyScreen());
+        findViewById(R.id.btn_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
         findViewById(R.id.btn_log).setOnClickListener(v -> startActivity(new Intent(this, FlightLogActivity.class)));
         findViewById(R.id.btn_settings).setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
 

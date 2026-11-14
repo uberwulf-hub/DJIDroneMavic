@@ -16,6 +16,8 @@ goes straight to the fly screen: live video, telemetry, takeoff/land, return hom
   Tap a flight to open its takeoff spot in Maps.
 - **Safety & Settings:** beginner mode, max altitude, distance limit, return-to-home altitude and
   low-battery warning, saved straight to the drone. Plus units (ft/m), grid lines and default mode.
+- **Photos & Videos:** browse the drone's SD card, tap "Select new" and download to the phone's
+  gallery (album "Air Pilot"). Already-saved files are marked so you don't download twice.
 - Screen stays awake while the fly screen is open.
 
 Mockups (drawn from the layouts, not real device screenshots):
@@ -40,7 +42,10 @@ When the run finishes, download **AirPilot-debug-apk** from the bottom of the ru
 
 ## Installing on the phone
 
-1. Unzip the download and open the `.apk` with Files, then allow installing from that app if asked.
+**Phone download link (always the newest build):**
+https://github.com/uberwulf-hub/DJIDroneMavic/releases/latest/download/AirPilot.apk
+
+1. Open that link in Chrome on the phone, then open the downloaded `AirPilot.apk` and allow installing if asked.
 2. The phone needs internet the first time the app opens, so it can register with DJI.
 3. Plug the phone into the controller, power on the controller and then the drone.
    The app jumps to the fly screen once the drone connects. The **FLY** button opens it any time.

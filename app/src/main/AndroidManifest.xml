@@ -78,6 +78,11 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".MediaActivity"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <activity
             android:name=".FlightLogActivity"
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|keyboardHidden" />

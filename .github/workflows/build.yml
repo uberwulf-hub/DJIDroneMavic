@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,8 +29,24 @@ jobs:
             echo "::warning::DJI_API_KEY secret is not set. The app will build but cannot connect to the drone."
           fi
           ./gradlew assembleDebug --stacktrace
+          cp app/build/outputs/apk/debug/*.apk AirPilot.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: AirPilot-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: AirPilot.apk
+
+      # Publishes the APK at a fixed link for the phone:
+      # https://github.com/<owner>/<repo>/releases/latest/download/AirPilot.apk
+      - name: Publish to "Latest build" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(grep -m1 versionName app/build.gradle | sed 's/.*"\(.*\)".*/\1/')
+          NOTES="Air Pilot $VERSION, built from ${GITHUB_SHA::7} on ${GITHUB_REF_NAME}."
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest AirPilot.apk --clobber
+            gh release edit latest --title "Air Pilot $VERSION (latest build)" --notes "$NOTES" --latest
+          else
+            gh release create latest AirPilot.apk --title "Air Pilot $VERSION (latest build)" --notes "$NOTES" --latest --target "$GITHUB_SHA"
+          fi
