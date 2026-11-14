@@ -95,7 +95,11 @@ android {
 }
 
 dependencies {
-    implementation 'com.dji:dji-uxsdk:4.16.2'
+    implementation('com.dji:dji-uxsdk:4.16.2') {
+        // Mapbox maps are unused (the fly screen uses the built-in map) and some of
+        // their libraries only existed on the retired JCenter repository.
+        exclude group: 'com.mapbox.mapboxsdk'
+    }
     compileOnly 'com.dji:dji-sdk-provided:4.16.2'
 
     implementation 'androidx.multidex:multidex:2.0.1'
