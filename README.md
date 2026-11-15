@@ -20,6 +20,9 @@ goes straight to the fly screen: live video, telemetry, takeoff/land, return hom
   gallery (album "Air Pilot"). Already-saved files are marked so you don't download twice.
 - **Smart moves:** Orbit (circle what the camera is pointing at) and Dronie (fly back and up while
   filming). Any stick movement, Pause or Return-to-Home cancels instantly; needs strong GPS.
+- **ActiveTrack (DJI's own vision tracking):** draw a box around a person and the drone follows
+  (behind or alongside), keeps the camera on them (Spotlight), or flies a QuickShot around them:
+  Circle, Helix, Rocket, Dronie, Boomerang, Asteroid.
 - **Auto-download after landing:** new photos and videos from the flight come straight to the phone.
 - **Google Drive sync:** downloaded media (and flight logs) upload to a Drive folder in the background.
 - Screen stays awake while the fly screen is open.

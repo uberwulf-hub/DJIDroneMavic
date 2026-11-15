@@ -35,7 +35,7 @@ import dji.ux.widget.controls.LensControlWidget;
 /**
  * Activity that shows all the UI elements together
  */
-public class FlyActivity extends Activity implements Telemetry.Listener, SmartMove.Listener {
+public class FlyActivity extends Activity implements Telemetry.Listener, SmartMove.Listener, ActiveTracker.Listener {
 
     private FlightMap mapWidget;
     private ViewGroup parentView;
@@ -70,6 +70,11 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     private View closePanelsButton;
     private View moveBanner;
     private TextView moveText;
+    private TextView moveHint;
+    private TrackOverlay trackOverlay;
+    private View trackCancel;
+    private ActiveTracker.Kind pendingKind;
+    private boolean pendingRecord;
     private boolean wasFlying;
     private long flightStartedAt;
     private android.app.AlertDialog landingDialog;
@@ -133,7 +138,15 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         moveBanner = findViewById(R.id.move_banner);
         moveText = findViewById(R.id.move_text);
         findViewById(R.id.btn_moves).setOnClickListener(v -> showMovesDialog());
-        findViewById(R.id.move_stop).setOnClickListener(v -> SmartMove.get(this).stop("Stopped."));
+        moveHint = findViewById(R.id.move_hint);
+        trackOverlay = findViewById(R.id.track_overlay);
+        trackCancel = findViewById(R.id.track_cancel);
+        trackOverlay.setOnBoxListener(this::onSubjectBoxed);
+        trackCancel.setOnClickListener(v -> cancelSelecting());
+        findViewById(R.id.move_stop).setOnClickListener(v -> {
+            SmartMove.get(this).stop("Stopped.");
+            ActiveTracker.get().stop();
+        });
         closePanelsButton = findViewById(R.id.btn_close_panels);
         closePanelsButton.setOnClickListener(v -> closeAllPanels());
         parentView.getViewTreeObserver().addOnGlobalLayoutListener(this::updateCloseButton);
@@ -147,7 +160,143 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     // ------------------------------------------------------------ smart moves
 
     private void showMovesDialog() {
-        if (SmartMove.get(this).isRunning()) return;
+        if (SmartMove.get(this).isRunning() || ActiveTracker.get().isRunning()) return;
+        final ActiveTracker.Kind[] kinds = ActiveTracker.Kind.values();
+        String[] items = new String[kinds.length + 2];
+        for (int i = 0; i < kinds.length; i++) items[i] = "\u25CE  " + kinds[i].title + "  (tracks a person)";
+        items[kinds.length] = "\u21BB  Orbit a spot  (GPS, no subject needed)";
+        items[kinds.length + 1] = "\u2196  Dronie  (GPS, no subject needed)";
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Smart moves")
+                .setItems(items, (d, which) -> {
+                    if (which < kinds.length) confirmTrack(kinds[which]);
+                    else showGpsMoveDialog(which == kinds.length);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void confirmTrack(ActiveTracker.Kind kind) {
+        android.widget.CheckBox record = new android.widget.CheckBox(this);
+        record.setText("Record video while tracking");
+        record.setChecked(true);
+        record.setTextColor(0xFFFFFFFF);
+        android.widget.LinearLayout box = new android.widget.LinearLayout(this);
+        box.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad = DensityUtil.dip2px(this, 20);
+        box.setPadding(pad, pad / 2, pad, 0);
+        TextView tips = new TextView(this);
+        tips.setTextColor(0xFFDDDDDD);
+        tips.setTextSize(14);
+        tips.setText(kind.help + "\n\nTips: hover 3\u201310 m (10\u201330 ft) from the person at head height or a bit above, "
+                + "with the whole body in view. Open areas work best \u2014 the drone can't see obstacles to its sides. "
+                + "Move a stick or tap STOP to end it.");
+        box.addView(tips);
+        if (!kind.title.startsWith("QuickShot")) box.addView(record);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(kind.title)
+                .setView(box)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Choose person", (d, w) -> {
+                    pendingKind = kind;
+                    pendingRecord = record.isChecked();
+                    closeAllPanels();
+                    trackOverlay.setSelecting(true);
+                    trackCancel.setVisibility(View.VISIBLE);
+                })
+                .show();
+    }
+
+    private void cancelSelecting() {
+        pendingKind = null;
+        trackOverlay.setSelecting(false);
+        trackCancel.setVisibility(View.GONE);
+    }
+
+    private void onSubjectBoxed(android.graphics.RectF screenBox) {
+        trackCancel.setVisibility(View.GONE);
+        ActiveTracker.Kind kind = pendingKind;
+        pendingKind = null;
+        if (kind == null) return;
+        android.graphics.RectF norm = toVideo(screenBox);
+        String problem = norm == null ? "Live video isn't showing yet."
+                : ActiveTracker.get().start(this, kind, norm, pendingRecord);
+        if (problem != null) {
+            trackOverlay.setTarget(null, 0);
+            new android.app.AlertDialog.Builder(this).setTitle("Can't start").setMessage(problem)
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        trackOverlay.setTarget(screenBox, 0xFFFFFFFF);
+        moveText.setText("Locking on…");
+        moveHint.setText("Move a stick or tap STOP to end");
+        moveBanner.setVisibility(View.VISIBLE);
+    }
+
+    /** The actual video picture inside the FPV widget (it's letterboxed to the camera's aspect ratio). */
+    private View videoView() {
+        View tv = findTexture(fpvWidget);
+        return tv != null ? tv : fpvWidget;
+    }
+
+    private static View findTexture(View v) {
+        if (v instanceof android.view.TextureView || v instanceof android.view.SurfaceView) return v;
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) {
+                View f = findTexture(g.getChildAt(i));
+                if (f != null) return f;
+            }
+        }
+        return null;
+    }
+
+    /** Overlay coordinates -> normalized video coordinates (0..1). */
+    private android.graphics.RectF toVideo(android.graphics.RectF r) {
+        View video = videoView();
+        if (video.getWidth() == 0 || video.getHeight() == 0) return null;
+        int[] vo = new int[2], oo = new int[2];
+        video.getLocationOnScreen(vo);
+        trackOverlay.getLocationOnScreen(oo);
+        float w = video.getWidth(), h = video.getHeight();
+        float l = (r.left + oo[0] - vo[0]) / w, t = (r.top + oo[1] - vo[1]) / h;
+        float rr = (r.right + oo[0] - vo[0]) / w, b = (r.bottom + oo[1] - vo[1]) / h;
+        return new android.graphics.RectF(clamp01(l), clamp01(t), clamp01(rr), clamp01(b));
+    }
+
+    /** Normalized video coordinates -> overlay coordinates. */
+    private android.graphics.RectF fromVideo(android.graphics.RectF n) {
+        View video = videoView();
+        int[] vo = new int[2], oo = new int[2];
+        video.getLocationOnScreen(vo);
+        trackOverlay.getLocationOnScreen(oo);
+        float w = video.getWidth(), h = video.getHeight();
+        return new android.graphics.RectF(n.left * w + vo[0] - oo[0], n.top * h + vo[1] - oo[1],
+                n.right * w + vo[0] - oo[0], n.bottom * h + vo[1] - oo[1]);
+    }
+
+    private static float clamp01(float v) {
+        return Math.max(0f, Math.min(1f, v));
+    }
+
+    @Override
+    public void onTrackUpdate(ActiveTracker.Kind kind, String status, android.graphics.RectF target, int confidence) {
+        moveBanner.setVisibility(View.VISIBLE);
+        moveText.setText(status);
+        if (target != null && target.width() > 0) {
+            int color = confidence == 2 ? 0xFF4CAF50 : confidence == 1 ? 0xFFFFC107 : confidence < 0 ? 0xFFE53935 : 0xFFFFFFFF;
+            trackOverlay.setTarget(fromVideo(target), color);
+        }
+    }
+
+    @Override
+    public void onTrackEnded(ActiveTracker.Kind kind, String reason) {
+        moveBanner.setVisibility(View.GONE);
+        trackOverlay.setTarget(null, 0);
+        android.widget.Toast.makeText(this, reason, android.widget.Toast.LENGTH_LONG).show();
+    }
+
+    private void showGpsMoveDialog(boolean orbitFirst) {
         boolean imperial = Prefs.isImperial(this);
         View v = getLayoutInflater().inflate(R.layout.dialog_moves, null);
         android.widget.RadioGroup type = v.findViewById(R.id.move_type);
@@ -172,6 +321,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
                     ? "Circles the spot the camera is pointing at, keeping it in frame. Point the camera at your subject first."
                     : "Flies backward and up while filming you, for a reveal shot. Face the camera at yourself first.");
         };
+        type.check(orbitFirst ? R.id.type_orbit : R.id.type_dronie);
         type.setOnCheckedChangeListener((g, id) -> refresh.run());
         refresh.run();
 
@@ -203,6 +353,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
                                 .show();
                     } else {
                         moveText.setText(orbit ? "Orbit starting…" : "Dronie starting…");
+                        moveHint.setText("Move any stick to take over");
                         moveBanner.setVisibility(View.VISIBLE);
                     }
                 })
@@ -300,6 +451,10 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
 
     @Override
     public void onBackPressed() {
+        if (trackOverlay != null && trackOverlay.isSelecting()) {
+            cancelSelecting();
+            return;
+        }
         if (anyPanelOpen()) {
             closeAllPanels();
             return;
@@ -492,13 +647,16 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         wasFlying = telemetry.last().flying;
         telemetry.addListener(this);
         SmartMove.get(this).setListener(this);
-        moveBanner.setVisibility(SmartMove.get(this).isRunning() ? View.VISIBLE : View.GONE);
+        ActiveTracker.get().setListener(this);
+        moveBanner.setVisibility(SmartMove.get(this).isRunning() || ActiveTracker.get().isRunning()
+                ? View.VISIBLE : View.GONE);
     }
 
     @Override
     protected void onPause() {
         Telemetry.get(this).removeListener(this);
         SmartMove.get(this).setListener(null);
+        ActiveTracker.get().setListener(null);
         mapWidget.onPause();
         super.onPause();
     }

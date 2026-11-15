@@ -492,6 +492,51 @@
         android:textStyle="bold"
         tools:ignore="RtlHardcoded" />
 
+
+    <!-- Shown whenever a DJI menu/panel is open, so it can always be closed -->
+    <TextView
+        android:id="@+id/btn_close_panels"
+        android:layout_width="wrap_content"
+        android:layout_height="44dp"
+        android:layout_below="@id/signal"
+        android:layout_alignParentRight="true"
+        android:layout_marginTop="24dp"
+        android:layout_marginRight="300dp"
+        android:background="@drawable/pill_bg"
+        android:gravity="center"
+        android:paddingLeft="18dp"
+        android:paddingRight="18dp"
+        android:text="\u2715  Close menu"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        tools:ignore="RtlHardcoded" />
+
+    <!-- ActiveTrack: draw a box around the subject / shows the tracked box -->
+    <com.saulls.airpilot.TrackOverlay
+        android:id="@+id/track_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/track_cancel"
+        android:layout_width="wrap_content"
+        android:layout_height="44dp"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="24dp"
+        android:background="@drawable/pill_bg"
+        android:gravity="center"
+        android:paddingLeft="20dp"
+        android:paddingRight="20dp"
+        android:text="Cancel"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <!-- Running move: progress + big stop -->
     <LinearLayout
         android:id="@+id/move_banner"
@@ -524,7 +569,8 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Move any stick to take over"
+                android:id="@+id/move_hint"
+        android:text="Move any stick to take over"
                 android:textColor="#B3FFFFFF"
                 android:textSize="13sp" />
         </LinearLayout>
@@ -542,25 +588,5 @@
             android:textSize="20sp"
             android:textStyle="bold" />
     </LinearLayout>
-
-    <!-- Shown whenever a DJI menu/panel is open, so it can always be closed -->
-    <TextView
-        android:id="@+id/btn_close_panels"
-        android:layout_width="wrap_content"
-        android:layout_height="44dp"
-        android:layout_below="@id/signal"
-        android:layout_alignParentRight="true"
-        android:layout_marginTop="24dp"
-        android:layout_marginRight="300dp"
-        android:background="@drawable/pill_bg"
-        android:gravity="center"
-        android:paddingLeft="18dp"
-        android:paddingRight="18dp"
-        android:text="\u2715  Close menu"
-        android:textColor="#FFFFFF"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:visibility="gone"
-        tools:ignore="RtlHardcoded" />
 
 </RelativeLayout>

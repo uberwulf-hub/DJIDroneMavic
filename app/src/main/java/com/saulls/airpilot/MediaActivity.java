@@ -185,19 +185,40 @@ public class MediaActivity extends Activity {
         }
 
         setStatus("Opening the drone's SD card…");
-        CommonCallbacks.CompletionCallback<DJIError> afterMode = error -> {
-            if (error != null) {
-                ui(() -> showMessage("Couldn't switch the camera to download mode:\n" + error.getDescription()));
-                return;
+        modeAttempt = 0;
+        // Right after landing the camera can still be finishing a video; make sure it's stopped.
+        camera.stopRecordVideo(null);
+        main.postDelayed(this::enterDownloadMode, 800);
+    }
+
+    private int modeAttempt;
+    private static final int MODE_ATTEMPTS = 6;
+
+    /** Switch the camera to download mode, retrying while it's busy, then trying the other method. */
+    private void enterDownloadMode() {
+        if (isDestroyed() || camera == null) return;
+        modeAttempt++;
+        // Alternate methods on later attempts: some DJI cameras only accept one of them.
+        boolean playback = camera.isFlatCameraModeSupported() ? modeAttempt <= 3 : modeAttempt > 3;
+        usedPlayback = playback;
+        CommonCallbacks.CompletionCallback<DJIError> afterMode = error -> ui(() -> {
+            if (error == null) {
+                refreshList();
+            } else if (modeAttempt < MODE_ATTEMPTS) {
+                setStatus("Camera busy, retrying… (" + modeAttempt + "/" + MODE_ATTEMPTS + ")");
+                main.postDelayed(this::enterDownloadMode, 2000);
+            } else {
+                showMessage("Couldn't switch the camera to download mode:\n" + error.getDescription()
+                        + "\n\nWait for the propellers to stop, then tap here to try again.");
+                message.setOnClickListener(v -> {
+                    message.setOnClickListener(null);
+                    message.setVisibility(View.GONE);
+                    connect();
+                });
             }
-            refreshList();
-        };
-        if (camera.isFlatCameraModeSupported()) {
-            usedPlayback = true;
-            camera.enterPlayback(afterMode);
-        } else {
-            camera.setMode(SettingsDefinitions.CameraMode.MEDIA_DOWNLOAD, afterMode);
-        }
+        });
+        if (playback) camera.enterPlayback(afterMode);
+        else camera.setMode(SettingsDefinitions.CameraMode.MEDIA_DOWNLOAD, afterMode);
     }
 
     private void refreshList() {
