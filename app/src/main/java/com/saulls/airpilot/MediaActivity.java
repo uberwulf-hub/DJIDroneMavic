@@ -61,7 +61,20 @@ public class MediaActivity extends Activity {
     /** Started right after landing: download files from this flight, then return. */
     public static final String EXTRA_AUTO_SINCE = "auto_since";
     private long autoSince = -1;
-    private static final int TYPE_HEADER = 0, TYPE_ITEM = 1;
+    private static final int TYPE_HEADER = 0, TYPE_ITEM = 1, TYPE_FOLDER = 2;
+
+    /** One day's photos and videos, shown as a folder tile. */
+    private static final class DayFolder {
+        final String day;
+        final List<MediaFile> items = new ArrayList<>();
+
+        DayFolder(String day) {
+            this.day = day;
+        }
+    }
+
+    /** null = showing the date folders; otherwise the day being viewed. */
+    private String openDay;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -256,19 +269,30 @@ public class MediaActivity extends Activity {
         });
     }
 
-    /** Groups files under day headers, newest day first. */
+    /** Date folders (newest first), or the open day's files under its header. */
     private void rebuildRows() {
         rows.clear();
-        String lastDay = null;
-        for (MediaFile f : files) {
-            String day = dayLabel(f.getTimeCreated());
-            if (!day.equals(lastDay)) {
-                rows.add(day);
-                lastDay = day;
+        if (openDay == null) {
+            DayFolder cur = null;
+            for (MediaFile f : files) {
+                String day = dayLabel(f.getTimeCreated());
+                if (cur == null || !cur.day.equals(day)) {
+                    cur = new DayFolder(day);
+                    rows.add(cur);
+                }
+                cur.items.add(f);
             }
-            rows.add(f);
+        } else {
+            rows.add(openDay);
+            for (MediaFile f : files) if (dayLabel(f.getTimeCreated()).equals(openDay)) rows.add(f);
         }
         adapter.notifyDataSetChanged();
+        grid.scrollToPosition(0);
+    }
+
+    private void openFolder(String day) {
+        openDay = day;
+        rebuildRows();
     }
 
     private static String dayLabel(long millis) {
@@ -301,6 +325,12 @@ public class MediaActivity extends Activity {
     private void notifyFile(MediaFile f) {
         int i = rows.indexOf(f);
         if (i >= 0) adapter.notifyItemChanged(i);
+        else if (openDay == null) {
+            for (int r = 0; r < rows.size(); r++) {
+                Object o = rows.get(r);
+                if (o instanceof DayFolder && ((DayFolder) o).items.contains(f)) adapter.notifyItemChanged(r);
+            }
+        }
         if (viewerIndex >= 0 && viewerIndex < files.size() && files.get(viewerIndex) == f) bindViewerImage(f);
     }
 
@@ -665,6 +695,11 @@ public class MediaActivity extends Activity {
             setSelectMode(false);
             return;
         }
+        if (openDay != null && !downloading) {
+            openDay = null;
+            rebuildRows();
+            return;
+        }
         if (downloading) {
             new AlertDialog.Builder(this)
                     .setTitle("Stop downloading?")
@@ -747,7 +782,8 @@ public class MediaActivity extends Activity {
     private final class MediaAdapter extends RecyclerView.Adapter<Holder> {
         @Override
         public int getItemViewType(int position) {
-            return rows.get(position) instanceof String ? TYPE_HEADER : TYPE_ITEM;
+            Object o = rows.get(position);
+            return o instanceof String ? TYPE_HEADER : o instanceof DayFolder ? TYPE_FOLDER : TYPE_ITEM;
         }
 
         @Override
@@ -758,7 +794,8 @@ public class MediaActivity extends Activity {
         @NonNull
         @Override
         public Holder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            int layout = viewType == TYPE_HEADER ? R.layout.item_media_header : R.layout.item_media;
+            int layout = viewType == TYPE_HEADER ? R.layout.item_media_header
+                    : viewType == TYPE_FOLDER ? R.layout.item_media_folder : R.layout.item_media;
             return new Holder(LayoutInflater.from(MediaActivity.this).inflate(layout, parent, false));
         }
 
@@ -766,6 +803,35 @@ public class MediaActivity extends Activity {
         public void onBindViewHolder(@NonNull Holder h, int position) {
             Object row = rows.get(position);
             View v = h.itemView;
+            if (row instanceof DayFolder) {
+                DayFolder df = (DayFolder) row;
+                Bitmap cover = null;
+                int photos = 0, videos = 0, fresh = 0, sel = 0;
+                for (MediaFile f : df.items) {
+                    if (cover == null && f.getThumbnail() != null) cover = f.getThumbnail();
+                    if (isVideo(f)) videos++;
+                    else photos++;
+                    if (!saved.contains(key(f))) fresh++;
+                    if (selected.contains(key(f))) sel++;
+                }
+                ((ImageView) v.findViewById(R.id.thumb)).setImageBitmap(cover);
+                ((TextView) v.findViewById(R.id.title)).setText(df.day);
+                String sub = (photos > 0 ? photos + (photos == 1 ? " photo" : " photos") : "")
+                        + (photos > 0 && videos > 0 ? " \u00B7 " : "")
+                        + (videos > 0 ? videos + (videos == 1 ? " video" : " videos") : "");
+                ((TextView) v.findViewById(R.id.sub)).setText(sub);
+                TextView badge = v.findViewById(R.id.badge);
+                String b = sel > 0 ? sel + " selected" : fresh > 0 ? fresh + " new" : "\u2713 saved";
+                badge.setText(b);
+                v.setOnClickListener(x -> {
+                    if (!downloading) openFolder(df.day);
+                });
+                v.setOnLongClickListener(x -> {
+                    if (!downloading) toggleDay(df.day);
+                    return true;
+                });
+                return;
+            }
             if (row instanceof String) {
                 String day = (String) row;
                 int count = 0, sel = 0;
@@ -775,7 +841,13 @@ public class MediaActivity extends Activity {
                         if (selected.contains(key(f))) sel++;
                     }
                 }
-                ((TextView) v.findViewById(R.id.day)).setText(day + "  ·  " + count);
+                TextView dayTitle = v.findViewById(R.id.day);
+                dayTitle.setText("\u2039  All dates  /  " + day + "  \u00B7  " + count);
+                dayTitle.setOnClickListener(x -> {
+                    if (downloading) return;
+                    openDay = null;
+                    rebuildRows();
+                });
                 TextView selDay = v.findViewById(R.id.select_day);
                 selDay.setText(sel == count && count > 0 ? "Clear day" : "Select day");
                 selDay.setOnClickListener(x -> toggleDay(day));
