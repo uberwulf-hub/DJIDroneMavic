@@ -46,7 +46,11 @@ final class GallerySaver {
 
     /** Sub-folder under the Air Pilot album for this capture date (or none if turned off). */
     static String subFolder(Context context, long takenMillis) {
-        return Prefs.byDate(context) ? dateFolder(takenMillis) : null;
+        String mission = MissionLog.missionAt(context, takenMillis);
+        String safe = mission == null ? null : mission.replaceAll("[\\\\/:*?\"<>|]", "").trim();
+        if (safe != null && safe.isEmpty()) safe = "Mission";
+        if (!Prefs.byDate(context)) return safe;
+        return safe == null ? dateFolder(takenMillis) : dateFolder(takenMillis) + "/" + safe;
     }
 
     /** Copies {@code source} into the gallery and returns the gallery Uri. */

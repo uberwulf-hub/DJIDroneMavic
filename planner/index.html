@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Air Pilot Planner</title>
+<meta name="description" content="Plan roof sweep and orbit missions for Air Pilot, then send them to the phone.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#242d34">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root {
+    --bg: #1b2227; --panel: #242d34; --line: #3a4750; --text: #f2f5f7; --muted: #a9b6bf;
+    --accent: #2f9a9a; --accent-2: #ffd54f; --warn: #ffb74d; --bad: #ff6b6b; --good: #8fe0a6;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .app { display: grid; grid-template-columns: 360px 1fr; height: 100%; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 16px 18px 28px; }
+  #map { height: 100%; }
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .tabs { display: flex; gap: 6px; margin: 8px 0 14px; }
+  .tabs button { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--line);
+    background: transparent; color: var(--text); font-weight: 600; cursor: pointer; font-size: 15px; }
+  .tabs button.on { background: var(--accent); border-color: var(--accent); }
+  .step { background: #1f272d; border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .step h2 { font-size: 13px; letter-spacing: .06em; color: var(--accent-2); margin: 0 0 8px; text-transform: uppercase; }
+  .help { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+  label.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0; }
+  label.row span { flex: 1; }
+  input[type=number], input[type=text], select { width: 110px; padding: 7px 8px; border-radius: 8px;
+    border: 1px solid var(--line); background: #151b1f; color: var(--text); font: inherit; }
+  input[type=text].wide { width: 100%; }
+  input[type=range] { width: 130px; accent-color: var(--accent); }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  button.b { padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line); background: transparent;
+    color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+  button.b.primary { background: var(--accent); border-color: var(--accent); }
+  button.b:disabled { opacity: .4; cursor: default; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 14px; }
+  .stats b { display: block; font-size: 18px; }
+  .warn { color: var(--warn); font-size: 13px; margin: 6px 0 0; }
+  .bad { color: var(--bad); font-size: 13px; margin: 6px 0 0; }
+  .ok { color: var(--good); font-size: 13px; margin: 6px 0 0; }
+  .search { display: flex; gap: 6px; margin-bottom: 12px; }
+  .search input { flex: 1; width: auto; }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px;
+    max-width: 440px; padding: 20px; }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  #qr { background: #fff; padding: 12px; border-radius: 10px; display: inline-block; margin: 8px 0; }
+  .lib li { margin: 4px 0; }
+  .lib a { color: var(--accent-2); cursor: pointer; }
+  .legend { position: absolute; z-index: 500; right: 12px; bottom: 22px; background: rgba(27,34,39,.9);
+    border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 12px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .wrap { position: relative; }
+  @media (max-width: 800px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 55% 45%; }
+    .wrap { order: -1; }
+    aside { border-right: 0; border-top: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h1>Air Pilot Planner</h1>
+    <div class="sub">Plan a roof scan here, then send it to the phone.</div>
+
+    <div class="search">
+      <input id="q" type="text" placeholder="Search an address…">
+      <button class="b" id="go">Find</button>
+      <button class="b" id="me" title="My location">◎</button>
+    </div>
+
+    <div class="tabs">
+      <button id="tab-sweep" class="on">Roof face sweep</button>
+      <button id="tab-orbit">Orbit</button>
+    </div>
+
+    <div class="step" id="draw-sweep">
+      <h2>1 · Trace the roof edge</h2>
+      <p class="help">Click the two ends of the roof's <b>lower edge</b> (the gutter line) on the face you want to scan.
+        The drone flies on the side with the yellow arrow.</p>
+      <div class="btns">
+        <button class="b" id="flip">⇄ Fly on the other side</button>
+        <button class="b" id="clear-sweep">Start over</button>
+      </div>
+    </div>
+
+    <div class="step" id="draw-orbit" hidden>
+      <h2>1 · Outline the house</h2>
+      <p class="help">Click each corner of the house (or roof). Click the first corner again, or press <b>Done</b>.</p>
+      <div class="btns">
+        <button class="b" id="done-orbit">Done</button>
+        <button class="b" id="clear-orbit">Start over</button>
+      </div>
+    </div>
+
+    <div class="step">
+      <h2>2 · Roof and flight</h2>
+      <label class="row"><span>Gutter height (ft)</span><input id="eave" type="number" value="10" min="0" step="1"></label>
+      <label class="row"><span>Peak height (ft)</span><input id="ridge" type="number" value="18" min="0" step="1"></label>
+      <label class="row sweep-only"><span>Gutter to peak, flat distance (ft)</span><input id="depth" type="number" value="16" min="2" step="1"></label>
+      <label class="row"><span>Distance from roof (ft)</span><input id="standoff" type="number" value="25" min="15" step="1"></label>
+      <label class="row sweep-only"><span>Camera angle down (°)</span><input id="look" type="number" value="35" min="15" max="70" step="5"></label>
+      <label class="row orbit-only" hidden><span>Loops</span>
+        <select id="rings"><option value="1">1 (quick)</option><option value="2" selected>2 (low + high)</option></select></label>
+      <label class="row orbit-only" hidden><span>Photos per loop</span>
+        <select id="per"><option>16</option><option selected>24</option><option>36</option></select></label>
+      <label class="row sweep-only"><span>Photo overlap</span><input id="overlap" type="range" min="40" max="80" value="65"><span id="overlapv" style="flex:0;width:40px">65%</span></label>
+      <label class="row"><span>Speed</span>
+        <select id="speed"><option value="1.5">Slow</option><option value="2.5" selected>Normal</option><option value="4">Fast</option></select></label>
+      <label class="row"><span>When finished</span>
+        <select id="finish"><option value="home" selected>Fly home</option><option value="hover">Hover there</option></select></label>
+      <p class="help">Heights are from where the drone takes off. Take off from the ground next to the house.
+        A single-story roof is about 10 ft at the gutter and 16–20 ft at the peak.</p>
+    </div>
+
+    <div class="step">
+      <h2>3 · Check the plan</h2>
+      <div id="stats" class="stats"><div class="help" style="grid-column:1/3">Draw on the map to see the flight.</div></div>
+      <div id="msgs"></div>
+    </div>
+
+    <div class="step">
+      <h2>4 · Send to the phone</h2>
+      <label class="row"><span>Name</span><input id="name" type="text" class="wide" placeholder="Front roof" style="width:180px"></label>
+      <div class="btns">
+        <button class="b primary" id="send" disabled>Send to phone (QR)</button>
+        <button class="b" id="download" disabled>Download plan file</button>
+        <button class="b" id="save" disabled>Save here</button>
+        <label class="b" style="display:inline-block">Open file…<input id="open" type="file" accept=".json,.airpilot" hidden></label>
+      </div>
+      <p class="help" style="margin-top:8px">For Google Drive: download the file, save it in Drive, then on the phone open
+        <b>Missions → Import</b> and pick it.</p>
+      <ul class="lib" id="lib"></ul>
+    </div>
+  </aside>
+  <div class="wrap">
+    <div id="map"></div>
+    <div class="legend"><i style="background:#ffd54f"></i>Flight path ·
+      <i style="background:#4fc3f7"></i>Photo · <i style="background:#ff6b6b"></i>Start</div>
+  </div>
+</div>
+
+<dialog id="dlg">
+  <h2 style="margin-top:0">Send to phone</h2>
+  <p class="help">Point the phone's camera at this code and tap the link. Air Pilot opens with the plan.</p>
+  <div id="qr"></div>
+  <p class="help">Or send yourself this link:</p>
+  <input id="link" type="text" class="wide" readonly>
+  <div class="btns"><button class="b" id="copy">Copy link</button><button class="b primary" id="close">Done</button></div>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="plan.js"></script>
+<script>
+(function () {
+  'use strict';
+  var FT = 0.3048;
+  var OPEN_URL = 'https://uberwulf-hub.github.io/DJIDroneMavic/m.html';
+  var $ = function (id) { return document.getElementById(id); };
+
+  var map = L.map('map', { zoomControl: true }).setView([39.5, -98.35], 4);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { maxZoom: 21, maxNativeZoom: 19, attribution: 'Imagery © Esri' }).addTo(map);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    { maxZoom: 21, maxNativeZoom: 19, opacity: 0.8 }).addTo(map);
+
+  var mode = 'sweep';
+  var edge = [];          // sweep: [A, B]
+  var side = 1;
+  var corners = [];       // orbit
+  var orbitClosed = false;
+  var plan = null;
+  var draw = L.layerGroup().addTo(map), path = L.layerGroup().addTo(map);
+
+  // ---------- inputs
+  function num(id) { var v = parseFloat($(id).value); return isNaN(v) ? 0 : v; }
+  function params() {
+    return {
+      name: $('name').value.trim() || undefined,
+      eave: num('eave') * FT, ridge: num('ridge') * FT, depth: num('depth') * FT,
+      standoff: num('standoff') * FT, lookDown: num('look'), overlap: num('overlap') / 100,
+      margin: 6 * FT, speed: parseFloat($('speed').value), finish: $('finish').value,
+      rings: parseInt($('rings').value, 10), perRing: parseInt($('per').value, 10), side: side
+    };
+  }
+
+  // ---------- map clicks
+  map.on('click', function (e) {
+    var p = { lat: e.latlng.lat, lng: e.latlng.lng };
+    if (mode === 'sweep') {
+      if (edge.length >= 2) edge = [];
+      edge.push(p);
+    } else {
+      if (orbitClosed) { corners = []; orbitClosed = false; }
+      if (corners.length >= 3 && map.distance(e.latlng, corners[0]) < 2.5) orbitClosed = true;
+      else corners.push(p);
+    }
+    update();
+  });
+
+  function setMode(m) {
+    mode = m;
+    $('tab-sweep').classList.toggle('on', m === 'sweep');
+    $('tab-orbit').classList.toggle('on', m === 'orbit');
+    $('draw-sweep').hidden = m !== 'sweep';
+    $('draw-orbit').hidden = m !== 'orbit';
+    document.querySelectorAll('.sweep-only').forEach(function (el) { el.hidden = m !== 'sweep'; });
+    document.querySelectorAll('.orbit-only').forEach(function (el) { el.hidden = m !== 'orbit'; });
+    update();
+  }
+  $('tab-sweep').onclick = function () { setMode('sweep'); };
+  $('tab-orbit').onclick = function () { setMode('orbit'); };
+  $('flip').onclick = function () { side = -side; update(); };
+  $('clear-sweep').onclick = function () { edge = []; update(); };
+  $('clear-orbit').onclick = function () { corners = []; orbitClosed = false; update(); };
+  $('done-orbit').onclick = function () { if (corners.length >= 3) { orbitClosed = true; update(); } };
+  ['eave', 'ridge', 'depth', 'standoff', 'look', 'overlap', 'speed', 'finish', 'rings', 'per', 'name']
+    .forEach(function (id) { $(id).addEventListener('input', update); });
+  $('overlap').addEventListener('input', function () { $('overlapv').textContent = $('overlap').value + '%'; });
+
+  // ---------- drawing + generation
+  function update() {
+    draw.clearLayers();
+    path.clearLayers();
+    plan = null;
+    var msgs = [];
+    if (mode === 'sweep') {
+      edge.forEach(function (p) { L.circleMarker(p, { radius: 6, color: '#fff', fillColor: '#ff6b6b', fillOpacity: 1 }).addTo(draw); });
+      if (edge.length === 2) {
+        L.polyline(edge, { color: '#ff6b6b', weight: 4 }).addTo(draw);
+        plan = AirPlan.sweep(Object.assign(params(), { a: edge[0], b: edge[1] }));
+      }
+    } else {
+      if (corners.length) {
+        L.polyline(orbitClosed ? corners.concat([corners[0]]) : corners, { color: '#ff6b6b', weight: 3 }).addTo(draw);
+        corners.forEach(function (p, i) {
+          L.circleMarker(p, { radius: i === 0 ? 7 : 5, color: '#fff', fillColor: '#ff6b6b', fillOpacity: 1 }).addTo(draw);
+        });
+      }
+      if (orbitClosed) plan = AirPlan.orbit(Object.assign(params(), { house: corners }));
+    }
+    if (plan && plan.error) { msgs.push('<p class="bad">' + plan.error + '</p>'); plan = null; }
+    if (plan) drawPlan(plan);
+    renderStats(plan, msgs);
+    ['send', 'download', 'save'].forEach(function (id) { $(id).disabled = !plan; });
+  }
+
+  function drawPlan(pl) {
+    var w = pl._preview.wps;
+    L.polyline(w.map(function (q) { return [q.lat, q.lng]; }), { color: '#ffd54f', weight: 3, opacity: .9 }).addTo(path);
+    w.forEach(function (q, i) {
+      L.polyline([[q.lat, q.lng], [q.aim.lat, q.aim.lng]], { color: '#4fc3f7', weight: 1, opacity: .35, dashArray: '3 4' }).addTo(path);
+      L.circleMarker([q.lat, q.lng], { radius: i === 0 ? 7 : 4, color: i === 0 ? '#fff' : '#4fc3f7',
+        fillColor: i === 0 ? '#ff6b6b' : '#4fc3f7', fillOpacity: 1, weight: i === 0 ? 2 : 1 })
+        .bindTooltip('#' + (i + 1) + ' · ' + Math.round(q.alt / FT) + ' ft up · camera ' + q.pitch + '°').addTo(path);
+    });
+    if (mode === 'sweep') {
+      // arrow showing the side the drone is on
+      var a = pl._preview.wps[0];
+      L.circleMarker([a.lat, a.lng], { radius: 10, color: '#ffd54f', fill: false, weight: 2 }).addTo(path);
+    }
+  }
+
+  function fmtTime(s) { var m = Math.floor(s / 60); return m + ':' + ('0' + (s % 60)).slice(-2); }
+
+  function renderStats(pl, msgs) {
+    if (!pl) {
+      $('stats').innerHTML = '<div class="help" style="grid-column:1/3">' +
+        (mode === 'sweep' ? 'Click the two ends of the roof edge.' : 'Click the house corners, then Done.') + '</div>';
+      $('msgs').innerHTML = msgs.join('');
+      return;
+    }
+    var p = pl._preview;
+    $('stats').innerHTML =
+      '<div>Points<b>' + pl.wp.length + '</b></div>' +
+      '<div>Photos<b>' + p.photos + '</b></div>' +
+      '<div>Flight time<b>' + fmtTime(p.seconds) + '</b></div>' +
+      '<div>Battery<b>~' + p.battery + '%</b></div>' +
+      '<div>Path<b>' + Math.round(p.distance / FT) + ' ft</b></div>' +
+      '<div>Highest<b>' + Math.round(p.maxAlt / FT) + ' ft</b></div>';
+    p.warnings.forEach(function (w) { msgs.push('<p class="warn">⚠ ' + w + '</p>'); });
+    if (!p.warnings.length) msgs.push('<p class="ok">✔ Looks good. Check for trees and wires along the yellow path.</p>');
+    $('msgs').innerHTML = msgs.join('');
+  }
+
+  // ---------- transfer
+  function b64url(bytes) {
+    var s = ''; for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  async function encode(pl) {
+    var json = JSON.stringify(AirPlan.toTransfer(pl));
+    var stream = new Blob([json]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+    var buf = new Uint8Array(await new Response(stream).arrayBuffer());
+    return b64url(buf);
+  }
+  $('send').onclick = async function () {
+    if (!plan) return;
+    var url = OPEN_URL + '#' + await encode(plan);
+    $('link').value = url;
+    $('qr').innerHTML = '';
+    new QRCode($('qr'), { text: url, width: 300, height: 300, correctLevel: QRCode.CorrectLevel.L });
+    $('dlg').showModal();
+  };
+  $('close').onclick = function () { $('dlg').close(); };
+  $('copy').onclick = function () { $('link').select(); navigator.clipboard.writeText($('link').value); };
+
+  function fileName(pl) { return (pl.name || 'mission').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') + '.airpilot.json'; }
+  $('download').onclick = function () {
+    if (!plan) return;
+    var blob = new Blob([JSON.stringify(AirPlan.toTransfer(plan), null, 1)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName(plan);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  };
+
+  // ---------- library (this browser) and opening files
+  function lib() { try { return JSON.parse(localStorage.getItem('airplan-lib') || '[]'); } catch (e) { return []; } }
+  function setLib(l) { try { localStorage.setItem('airplan-lib', JSON.stringify(l)); } catch (e) {} renderLib(); }
+  function snapshot() {
+    return { name: $('name').value.trim() || (mode === 'sweep' ? 'Roof sweep' : 'Roof orbit'), mode: mode, edge: edge, side: side,
+      corners: corners, closed: orbitClosed, inputs: ['eave', 'ridge', 'depth', 'standoff', 'look', 'overlap', 'speed', 'finish', 'rings', 'per']
+        .reduce(function (o, id) { o[id] = $(id).value; return o; }, {}), saved: Date.now() };
+  }
+  function restore(s) {
+    edge = s.edge || []; side = s.side || 1; corners = s.corners || []; orbitClosed = !!s.closed;
+    Object.keys(s.inputs || {}).forEach(function (id) { if ($(id)) $(id).value = s.inputs[id]; });
+    $('name').value = s.name || ''; $('overlapv').textContent = $('overlap').value + '%';
+    setMode(s.mode || 'sweep');
+    var pts = (s.mode === 'orbit' ? corners : edge);
+    if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(1.5));
+  }
+  $('save').onclick = function () {
+    var s = snapshot(), l = lib().filter(function (x) { return x.name !== s.name; });
+    l.unshift(s); setLib(l.slice(0, 30));
+  };
+  function renderLib() {
+    var l = lib();
+    $('lib').innerHTML = l.length ? '<li class="help">Saved in this browser:</li>' : '';
+    l.forEach(function (s, i) {
+      var li = document.createElement('li');
+      li.innerHTML = '<a>' + s.name.replace(/</g, '&lt;') + '</a> <span class="help">' + new Date(s.saved).toLocaleDateString() + '</span> ' +
+        '<a style="color:var(--muted)" title="Delete">✕</a>';
+      li.children[0].onclick = function () { restore(s); };
+      li.children[2].onclick = function () { var x = lib(); x.splice(i, 1); setLib(x); };
+      $('lib').appendChild(li);
+    });
+  }
+  $('open').onchange = function (e) {
+    var f = e.target.files[0]; if (!f) return;
+    f.text().then(function (t) {
+      var m = JSON.parse(t);
+      if (m.app !== 'airpilot-mission') throw new Error('Not an Air Pilot plan');
+      // show the stored path read-only
+      draw.clearLayers(); path.clearLayers();
+      var pts = m.wp.map(function (w) { return [w[0], w[1]]; });
+      L.polyline(pts, { color: '#ffd54f', weight: 3 }).addTo(path);
+      pts.forEach(function (p) { L.circleMarker(p, { radius: 4, color: '#4fc3f7', fillOpacity: 1 }).addTo(path); });
+      map.fitBounds(L.latLngBounds(pts).pad(0.5));
+      $('stats').innerHTML = '<div class="help" style="grid-column:1/3">Opened "' + m.name + '" (' + m.wp.length +
+        ' points). To change it, draw it again.</div>';
+    }).catch(function (err) { alert('Could not open that file: ' + err.message); });
+  };
+
+  // ---------- search / locate
+  $('go').onclick = function () {
+    var q = $('q').value.trim(); if (!q) return;
+    fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q))
+      .then(function (r) { return r.json(); })
+      .then(function (r) { if (r[0]) map.setView([+r[0].lat, +r[0].lon], 20); else alert('Address not found'); })
+      .catch(function () { alert('Search failed'); });
+  };
+  $('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('go').click(); });
+  $('me').onclick = function () {
+    navigator.geolocation.getCurrentPosition(function (p) { map.setView([p.coords.latitude, p.coords.longitude], 20); },
+      function () { alert('Location not available'); });
+  };
+
+  renderLib();
+  setMode('sweep');
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+})();
+</script>
+</body>
+</html>

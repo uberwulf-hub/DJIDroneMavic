@@ -35,7 +35,11 @@ import dji.ux.widget.controls.LensControlWidget;
 /**
  * Activity that shows all the UI elements together
  */
-public class FlyActivity extends Activity implements Telemetry.Listener, SmartMove.Listener, ActiveTracker.Listener {
+public class FlyActivity extends Activity implements Telemetry.Listener, SmartMove.Listener, ActiveTracker.Listener, MissionRunner.Listener {
+
+    public static final String EXTRA_MISSION = "mission";
+    private Mission pendingMission;
+    private TextView missionStart;
 
     private FlightMap mapWidget;
     private ViewGroup parentView;
@@ -153,6 +157,8 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         findViewById(R.id.btn_look_down).setOnClickListener(v -> pointGimbal(-90));
         findViewById(R.id.btn_level).setOnClickListener(v -> pointGimbal(0));
         findViewById(R.id.btn_camera_modes).setOnClickListener(v -> showCameraModes());
+        missionStart = findViewById(R.id.btn_mission_start);
+        missionStart.setOnClickListener(v -> confirmMission());
         moveBanner = findViewById(R.id.move_banner);
         moveText = findViewById(R.id.move_text);
         findViewById(R.id.btn_moves).setOnClickListener(v -> showMovesDialog());
@@ -164,6 +170,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         findViewById(R.id.move_stop).setOnClickListener(v -> {
             SmartMove.get(this).stop("Stopped.");
             ActiveTracker.get().stop();
+            MissionRunner.get(this).stop("Mission stopped. The drone is hovering; fly it home when ready.");
         });
         closePanelsButton = findViewById(R.id.btn_close_panels);
         closePanelsButton.setOnClickListener(v -> closeAllPanels());
@@ -173,6 +180,91 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
             Prefs.setAdvanced(this, !advanced);
             applyMode();
         });
+    }
+
+    // ------------------------------------------------------------ missions
+
+    @Override
+    protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        loadPendingMission(intent);
+    }
+
+    private void loadPendingMission(android.content.Intent intent) {
+        String id = intent == null ? null : intent.getStringExtra(EXTRA_MISSION);
+        if (id != null) {
+            pendingMission = Mission.load(this, id);
+            intent.removeExtra(EXTRA_MISSION);
+        }
+        if (MissionRunner.get(this).isRunning()) pendingMission = MissionRunner.get(this).mission();
+        if (pendingMission == null) {
+            missionStart.setVisibility(View.GONE);
+            mapWidget.setPlannedPath(null);
+            return;
+        }
+        java.util.List<org.osmdroid.util.GeoPoint> pts = new java.util.ArrayList<>();
+        for (Mission.Wp w : pendingMission.wps) pts.add(new org.osmdroid.util.GeoPoint(w.lat, w.lng));
+        mapWidget.setPlannedPath(pts);
+        missionStart.setText("\u25B6  Start mission: " + pendingMission.name);
+        missionStart.setVisibility(MissionRunner.get(this).isRunning() ? View.GONE : View.VISIBLE);
+    }
+
+    private void confirmMission() {
+        Mission m = pendingMission;
+        if (m == null) return;
+        String problem = MissionRunner.get(this).preflight(m);
+        if (problem != null) {
+            new android.app.AlertDialog.Builder(this).setTitle("Not yet").setMessage(problem)
+                    .setPositiveButton("OK", null)
+                    .setNeutralButton("Remove mission", (d, w) -> {
+                        pendingMission = null;
+                        loadPendingMission(null);
+                    }).show();
+            return;
+        }
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Fly \"" + m.name + "\"?")
+                .setMessage(m.photos() + " photos, about " + Units.duration(m.estimatedSeconds()) + " and ~"
+                        + m.estimatedBatteryPct() + "% battery. The drone flies the blue path on its own"
+                        + (m.goHome ? " and then comes home." : " and then hovers.")
+                        + "\n\nCheck the path is clear of trees and wires. Move a stick or tap STOP at any time to take over.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Start", (d, w) -> {
+                    String err = MissionRunner.get(this).start(m);
+                    if (err != null) {
+                        new android.app.AlertDialog.Builder(this).setTitle("Can't start").setMessage(err)
+                                .setPositiveButton("OK", null).show();
+                        return;
+                    }
+                    readyDismissed = true;
+                    readyCard.setVisibility(View.GONE);
+                    missionStart.setVisibility(View.GONE);
+                    moveText.setText("Sending the plan to the drone…");
+                    moveHint.setText("Move a stick or tap STOP to take over");
+                    moveBanner.setVisibility(View.VISIBLE);
+                })
+                .show();
+    }
+
+    @Override
+    public void onMissionProgress(Mission m, String text) {
+        moveBanner.setVisibility(View.VISIBLE);
+        moveText.setText(text);
+    }
+
+    @Override
+    public void onMissionEnded(Mission m, String reason, boolean completed) {
+        moveBanner.setVisibility(View.GONE);
+        if (completed) {
+            pendingMission = null;
+            loadPendingMission(null);
+        } else {
+            missionStart.setText("\u25B6  Restart mission: " + m.name);
+            missionStart.setVisibility(View.VISIBLE);
+        }
+        new android.app.AlertDialog.Builder(this).setTitle(completed ? "Mission complete" : "Mission ended")
+                .setMessage(reason).setPositiveButton("OK", null).show();
     }
 
     // ------------------------------------------------------------ home arrow
@@ -900,12 +992,14 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         telemetry.addListener(this);
         SmartMove.get(this).setListener(this);
         ActiveTracker.get().setListener(this);
+        MissionRunner.get(this).setListener(this);
+        loadPendingMission(getIntent());
         Weather.fetch(this, w -> {
             weather = w;
             updateReadyCard(Telemetry.get(this).last());
         });
         moveBanner.setVisibility(SmartMove.get(this).isRunning() || ActiveTracker.get().isRunning()
-                ? View.VISIBLE : View.GONE);
+                || MissionRunner.get(this).isRunning() ? View.VISIBLE : View.GONE);
     }
 
     @Override
@@ -913,6 +1007,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         Telemetry.get(this).removeListener(this);
         SmartMove.get(this).setListener(null);
         ActiveTracker.get().setListener(null);
+        MissionRunner.get(this).setListener(null);
         mapWidget.onPause();
         super.onPause();
     }

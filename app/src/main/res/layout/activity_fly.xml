@@ -503,6 +503,24 @@
             android:text="\u25C9  Camera" />
     </LinearLayout>
 
+    <!-- Mission ready to start -->
+    <TextView
+        android:id="@+id/btn_mission_start"
+        android:layout_width="wrap_content"
+        android:layout_height="44dp"
+        android:layout_below="@id/quick_row"
+        android:layout_alignLeft="@id/btn_home"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/button_bg"
+        android:gravity="center"
+        android:paddingLeft="18dp"
+        android:paddingRight="18dp"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        tools:ignore="RtlHardcoded" />
+
     <!-- Home arrow + return estimate (Simple mode) -->
     <LinearLayout
         android:id="@+id/home_panel"
@@ -546,7 +564,7 @@
         android:id="@+id/ready_card"
         android:layout_width="360dp"
         android:layout_height="wrap_content"
-        android:layout_below="@id/quick_row"
+        android:layout_below="@id/btn_mission_start"
         android:layout_alignParentLeft="true"
         android:layout_marginLeft="64dp"
         android:layout_marginTop="10dp"

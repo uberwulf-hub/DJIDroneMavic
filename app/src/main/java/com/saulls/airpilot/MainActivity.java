@@ -84,6 +84,7 @@ public class MainActivity extends Activity {
         flyButton.setOnClickListener(v -> openFlyScreen());
         findViewById(R.id.btn_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
         findViewById(R.id.btn_log).setOnClickListener(v -> startActivity(new Intent(this, FlightLogActivity.class)));
+        findViewById(R.id.btn_missions).setOnClickListener(v -> startActivity(new Intent(this, MissionsActivity.class)));
         findViewById(R.id.btn_batteries).setOnClickListener(v -> startActivity(new Intent(this, BatteriesActivity.class)));
         findViewById(R.id.btn_settings).setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
 

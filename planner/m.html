@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open in Air Pilot</title>
+<style>
+  :root { --bg:#242d34; --text:#f2f5f7; --muted:#a9b6bf; --accent:#2f9a9a; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg);
+    color:var(--text); font:16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding:16px; }
+  .card { max-width:420px; text-align:center; }
+  a.btn { display:inline-block; margin-top:18px; padding:14px 26px; border-radius:12px; background:var(--accent);
+    color:#fff; text-decoration:none; font-weight:700; font-size:18px; }
+  p { color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Air Pilot mission</h1>
+  <p id="msg">Opening Air Pilot…</p>
+  <a class="btn" id="open" href="#">Open in Air Pilot</a>
+  <p style="font-size:13px">Needs Air Pilot 1.0 or newer on this phone. On a computer, open this link on the phone instead.</p>
+</div>
+<script>
+  var data = location.hash.slice(1);
+  var intent = 'intent://plan?d=' + data + '#Intent;scheme=airpilot;package=com.saulls.airpilot;end';
+  var plain = 'airpilot://plan?d=' + data;
+  var isAndroid = /Android/i.test(navigator.userAgent);
+  document.getElementById('open').href = isAndroid ? intent : plain;
+  if (!data) document.getElementById('msg').textContent = 'This link has no plan in it.';
+  else if (isAndroid) location.href = intent;
+  else document.getElementById('msg').textContent = 'Open this link on the phone that has Air Pilot.';
+</script>
+</body>
+</html>

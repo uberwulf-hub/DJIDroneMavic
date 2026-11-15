@@ -35,6 +35,22 @@ Mockups (drawn from the layouts, not real device screenshots):
 
 More in [docs/mockups](docs/mockups).
 
+## Roof scan missions
+
+Plan on a computer with the **Air Pilot Planner** (https://uberwulf-hub.github.io/DJIDroneMavic/),
+which you can install as an app from Edge or Chrome.
+
+- **Roof face sweep:** click the two ends of a roof's lower edge; the drone flies side to side in rows,
+  stepping up, with the camera aimed at the tiles.
+- **Orbit:** click the house corners; the drone circles (one or two loops) with the camera on the roof.
+
+Send the plan with **Send to phone** (scan the QR code) or **Download plan file** into Google Drive
+and use **Missions → Import** on the phone. In the air, tap **Start mission**. Moving a stick or
+tapping STOP takes over. Photos are filed under the date and the mission name.
+
+The planner site is published by the "Publish planner website" workflow. It needs GitHub Pages
+turned on once: repo **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+
 ## One-time setup
 
 1. **DJI App Key.** At developer.dji.com go to Apps, then Create App. Choose Mobile SDK and enter the package

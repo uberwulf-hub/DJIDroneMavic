@@ -88,6 +88,36 @@
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|keyboardHidden" />
         <activity
+            android:name=".MissionsActivity"
+            android:launchMode="singleTop"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- Plans from the planner: airpilot:// links (QR codes) and plan files -->
+        <activity
+            android:name=".ImportActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="airpilot" android:host="plan" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/json" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/json" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".BatteriesActivity"
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|keyboardHidden" />

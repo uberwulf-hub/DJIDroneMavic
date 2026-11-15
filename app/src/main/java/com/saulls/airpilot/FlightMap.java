@@ -64,6 +64,7 @@ public class FlightMap extends FrameLayout implements LocationListener {
     private final Marker home;
     private final Marker phone;
     private final Polyline path;
+    private Polyline planned;
     private final TextView layerButton;
     private final TextView recenterButton;
     private final TextView attribution;
@@ -226,6 +227,24 @@ public class FlightMap extends FrameLayout implements LocationListener {
     }
 
     // ------------------------------------------------------------ data
+
+    /** Shows (or clears, with null) a planned mission path. */
+    public void setPlannedPath(java.util.List<GeoPoint> pts) {
+        if (planned != null) map.getOverlays().remove(planned);
+        planned = null;
+        if (pts != null && pts.size() > 1) {
+            planned = new Polyline(map);
+            planned.setPoints(pts);
+            planned.getOutlinePaint().setColor(Color.parseColor("#4FC3F7"));
+            planned.getOutlinePaint().setStrokeWidth(dp(3));
+            map.getOverlays().add(0, planned);
+            if (lastAircraft == null) {
+                map.getController().setZoom(19.0);
+                map.getController().setCenter(pts.get(0));
+            }
+        }
+        map.invalidate();
+    }
 
     public void update(Telemetry.Snapshot s) {
         if (!Double.isNaN(s.homeLat)) {
