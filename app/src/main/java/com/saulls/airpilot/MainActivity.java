@@ -84,6 +84,7 @@ public class MainActivity extends Activity {
         flyButton.setOnClickListener(v -> openFlyScreen());
         findViewById(R.id.btn_media).setOnClickListener(v -> startActivity(new Intent(this, MediaActivity.class)));
         findViewById(R.id.btn_log).setOnClickListener(v -> startActivity(new Intent(this, FlightLogActivity.class)));
+        findViewById(R.id.btn_batteries).setOnClickListener(v -> startActivity(new Intent(this, BatteriesActivity.class)));
         findViewById(R.id.btn_settings).setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
 
         if (!hasApiKey()) {
@@ -103,6 +104,17 @@ public class MainActivity extends Activity {
         resumed = true;
         refreshProductStatus();
         refreshSummary();
+        Weather.fetch(this, w -> {
+            TextView wt = findViewById(R.id.weather);
+            if (w == null) {
+                wt.setText("");
+                return;
+            }
+            int lvl = w.level();
+            wt.setText((lvl == 0 ? "\u2714 " : "\u26A0 ") + w.summary(Prefs.isImperial(this))
+                    + (lvl == 2 ? " \u2014 too windy to fly" : lvl == 1 ? " \u2014 breezy, fly carefully" : " \u2014 good flying weather"));
+            wt.setTextColor(lvl == 0 ? 0xFF9FE3B0 : lvl == 1 ? 0xFFFFB74D : 0xFFFF5252);
+        });
     }
 
     @Override

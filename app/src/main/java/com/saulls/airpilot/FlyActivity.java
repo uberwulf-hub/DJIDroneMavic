@@ -76,6 +76,10 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     private ActiveTracker.Kind pendingKind;
     private boolean pendingRecord;
     private boolean wasFlying;
+    private View homePanel, readyCard;
+    private TextView homeArrow, homeText, readyTitle, readyRows, countdown;
+    private boolean readyDismissed;
+    private Weather.Now weather;
     private long flightStartedAt;
     private android.app.AlertDialog landingDialog;
     private int edgeInset;
@@ -135,6 +139,20 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         modeToggle = findViewById(R.id.mode_toggle);
         findViewById(R.id.btn_home).setOnClickListener(v -> finish());
         applyEdgeInsets();
+        homePanel = findViewById(R.id.home_panel);
+        homeArrow = findViewById(R.id.home_arrow);
+        homeText = findViewById(R.id.home_text);
+        readyCard = findViewById(R.id.ready_card);
+        readyTitle = findViewById(R.id.ready_title);
+        readyRows = findViewById(R.id.ready_rows);
+        countdown = findViewById(R.id.countdown);
+        findViewById(R.id.ready_close).setOnClickListener(v -> {
+            readyDismissed = true;
+            readyCard.setVisibility(View.GONE);
+        });
+        findViewById(R.id.btn_look_down).setOnClickListener(v -> pointGimbal(-90));
+        findViewById(R.id.btn_level).setOnClickListener(v -> pointGimbal(0));
+        findViewById(R.id.btn_camera_modes).setOnClickListener(v -> showCameraModes());
         moveBanner = findViewById(R.id.move_banner);
         moveText = findViewById(R.id.move_text);
         findViewById(R.id.btn_moves).setOnClickListener(v -> showMovesDialog());
@@ -154,6 +172,235 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         modeToggle.setOnClickListener(v -> {
             Prefs.setAdvanced(this, !advanced);
             applyMode();
+        });
+    }
+
+    // ------------------------------------------------------------ home arrow
+
+    private void updateHomePanel(Telemetry.Snapshot s) {
+        boolean show = !advanced && s.flying && !Double.isNaN(s.distanceM) && s.distanceM > 5;
+        homePanel.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (!show) return;
+        if (!Double.isNaN(s.homeRelBearing)) homeArrow.setRotation((float) s.homeRelBearing);
+        StringBuilder t = new StringBuilder("Home ").append(Units.distance(s.distanceM, imperial));
+        int color = 0xFFFFFFFF;
+        if (s.returnSeconds > 0) t.append(" \u00B7 ").append(Units.duration(s.returnSeconds)).append(" back");
+        if (s.returnBatteryNeeded > 0 && s.batteryPct > 0) {
+            t.append(" \u00B7 needs ~").append(s.returnBatteryNeeded).append("%");
+            int margin = s.batteryPct - s.returnBatteryNeeded;
+            color = margin <= 5 ? 0xFFFF5252 : margin <= 15 ? 0xFFFFB74D : 0xFF9FE3B0;
+        }
+        homeText.setText(t);
+        homeText.setTextColor(color);
+        homeArrow.setTextColor(color);
+    }
+
+    // ------------------------------------------------------------ ready to fly
+
+    private void updateReadyCard(Telemetry.Snapshot s) {
+        boolean show = !readyDismissed && !s.flying && s.connected
+                && System.currentTimeMillis() - s.time < 3000 && !ActiveTracker.get().isRunning();
+        readyCard.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (!show) return;
+        int worst = 0;
+        StringBuilder rows = new StringBuilder();
+
+        int gps = s.satellites >= 10 && !Double.isNaN(s.homeLat) ? 0 : s.satellites >= 6 ? 1 : 2;
+        worst = Math.max(worst, gps);
+        rows.append(mark(gps)).append(" GPS: ").append(s.satellites).append(" satellites")
+                .append(Double.isNaN(s.homeLat) ? ", home not set yet" : ", home point set").append('\n');
+
+        int batt;
+        if (s.batteryPct < 0) {
+            batt = 1;
+            rows.append(mark(1)).append(" Battery: reading…\n");
+        } else {
+            batt = s.batteryPct >= 60 ? 0 : s.batteryPct >= 30 ? 1 : 2;
+            String temp = "";
+            if (!Double.isNaN(s.batteryTempC)) {
+                temp = " \u00B7 " + Math.round(s.batteryTempC) + "°C";
+                if (s.batteryTempC < 15) { batt = Math.max(batt, 1); temp += " (cold: hover a minute first)"; }
+                if (s.batteryTempC > 50) { batt = Math.max(batt, 1); temp += " (warm: let it cool)"; }
+            }
+            rows.append(mark(batt)).append(" Battery: ").append(s.batteryPct).append('%').append(temp).append('\n');
+        }
+        worst = Math.max(worst, batt);
+
+        BatteryBook.Pack pack = BatteryBook.get(this, s.batterySerial);
+        if (pack != null) {
+            int h = pack.healthPct();
+            int hl = h < 0 ? 0 : h >= 85 ? 0 : h >= 70 ? 1 : 2;
+            worst = Math.max(worst, hl);
+            rows.append(mark(hl)).append(' ').append(pack.name).append(": ")
+                    .append(h >= 0 ? h + "% health" : "health unknown")
+                    .append(pack.cycles >= 0 ? " \u00B7 " + pack.cycles + " cycles" : "").append('\n');
+        }
+
+        int comp = s.compassError ? 2 : 0;
+        worst = Math.max(worst, comp);
+        rows.append(mark(comp)).append(" Compass: ").append(s.compassError
+                ? "interference \u2014 move away from metal or calibrate" : "OK").append('\n');
+
+        if (!s.sdInserted) {
+            worst = 2;
+            rows.append(mark(2)).append(" SD card: none in the drone\n");
+        } else if (s.sdRemainingMB >= 0) {
+            int sd = s.sdFull || s.sdRemainingMB < 500 ? 2 : s.sdRemainingMB < 2000 ? 1 : 0;
+            worst = Math.max(worst, sd);
+            rows.append(mark(sd)).append(" SD card: ")
+                    .append(String.format(java.util.Locale.US, "%.1f GB free", s.sdRemainingMB / 1024.0))
+                    .append(s.sdRecordSecondsLeft > 0 ? " (~" + (s.sdRecordSecondsLeft / 60) + " min video)" : "")
+                    .append('\n');
+        }
+
+        if (weather != null) {
+            int wl = weather.level();
+            worst = Math.max(worst, wl);
+            rows.append(mark(wl)).append(' ').append(weather.summary(imperial))
+                    .append(wl == 2 ? " \u2014 too windy for a Mavic Air" : wl == 1 ? " \u2014 fly carefully" : "");
+        } else {
+            rows.append(mark(1)).append(" Wind: unavailable (needs internet)");
+        }
+
+        readyTitle.setText(worst == 0 ? "\u2705 Ready to fly" : worst == 1 ? "\u26A0\uFE0F Check before flying" : "\u26D4 Not ready");
+        readyRows.setText(rows.toString().trim());
+    }
+
+    private static String mark(int level) {
+        return level == 0 ? "\u2714" : level == 1 ? "\u26A0" : "\u2716";
+    }
+
+    // ------------------------------------------------------------ gimbal + camera
+
+    private void pointGimbal(float pitch) {
+        dji.sdk.base.BaseProduct p = dji.sdk.sdkmanager.DJISDKManager.getInstance().getProduct();
+        dji.sdk.gimbal.Gimbal g = p != null && p.isConnected() ? p.getGimbal() : null;
+        if (g == null) {
+            toast("Drone not connected.");
+            return;
+        }
+        g.rotate(new dji.common.gimbal.Rotation.Builder()
+                .mode(dji.common.gimbal.RotationMode.ABSOLUTE_ANGLE)
+                .pitch(pitch)
+                .time(1.0)
+                .build(), err -> {
+            if (err != null) runOnUiThread(() -> toast("Gimbal: " + err.getDescription()));
+        });
+    }
+
+    private dji.sdk.camera.Camera camera() {
+        dji.sdk.base.BaseProduct p = dji.sdk.sdkmanager.DJISDKManager.getInstance().getProduct();
+        return p != null && p.isConnected() ? p.getCamera() : null;
+    }
+
+    private void toast(String t) {
+        android.widget.Toast.makeText(this, t, android.widget.Toast.LENGTH_LONG).show();
+    }
+
+    private void showCameraModes() {
+        String[] items = {
+                "\u25C9  Single photo",
+                "\u23F1  Photo in 3 seconds",
+                "\u23F1  Photo in 10 seconds",
+                "\u2630  Burst: 3 photos",
+                "\u2630  Burst: 5 photos",
+                "\u25CB  Panorama: Sphere (the drone spins and tilts, ~1 min)",
+                "\u25E0  Panorama: 180\u00B0",
+                "\u25AD  Panorama: Wide",
+                "\u25AF  Panorama: Vertical",
+        };
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Camera")
+                .setItems(items, (d, which) -> {
+                    switch (which) {
+                        case 0: shoot(dji.common.camera.SettingsDefinitions.ShootPhotoMode.SINGLE, null, null, "Photo taken"); break;
+                        case 1: timerShot(3); break;
+                        case 2: timerShot(10); break;
+                        case 3: shoot(dji.common.camera.SettingsDefinitions.ShootPhotoMode.BURST,
+                                dji.common.camera.SettingsDefinitions.PhotoBurstCount.BURST_COUNT_3, null, "Burst taken"); break;
+                        case 4: shoot(dji.common.camera.SettingsDefinitions.ShootPhotoMode.BURST,
+                                dji.common.camera.SettingsDefinitions.PhotoBurstCount.BURST_COUNT_5, null, "Burst taken"); break;
+                        case 5: pano(dji.common.camera.SettingsDefinitions.PhotoPanoramaMode.PANORAMA_MODE_SPHERE); break;
+                        case 6: pano(dji.common.camera.SettingsDefinitions.PhotoPanoramaMode.PANORAMA_MODE_180); break;
+                        case 7: pano(dji.common.camera.SettingsDefinitions.PhotoPanoramaMode.PANORAMA_MODE_3X3); break;
+                        default: pano(dji.common.camera.SettingsDefinitions.PhotoPanoramaMode.PANORAMA_MODE_1X3); break;
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void timerShot(int seconds) {
+        final int[] left = {seconds};
+        countdown.setVisibility(View.VISIBLE);
+        countdown.setText(String.valueOf(left[0]));
+        Runnable tick = new Runnable() {
+            @Override
+            public void run() {
+                left[0]--;
+                if (left[0] <= 0) {
+                    countdown.setVisibility(View.GONE);
+                    shoot(dji.common.camera.SettingsDefinitions.ShootPhotoMode.SINGLE, null, null, "Photo taken");
+                } else {
+                    countdown.setText(String.valueOf(left[0]));
+                    if (left[0] <= 3) VoiceAlerts.get(FlyActivity.this).say("count" + left[0], String.valueOf(left[0]), 500);
+                    parentView.postDelayed(this, 1000);
+                }
+            }
+        };
+        parentView.postDelayed(tick, 1000);
+    }
+
+    private void pano(dji.common.camera.SettingsDefinitions.PhotoPanoramaMode mode) {
+        if (!Telemetry.get(this).last().flying) {
+            toast("Take off first: the drone turns itself to shoot a panorama.");
+            return;
+        }
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Panorama")
+                .setMessage("The drone will hover and turn on its own while it takes the photos. "
+                        + "Keep your thumbs off the sticks until it says it's done.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Start", (d, w) -> shoot(dji.common.camera.SettingsDefinitions.ShootPhotoMode.PANORAMA,
+                        null, mode, "Panorama started. The drone stitches it when done."))
+                .show();
+    }
+
+    /** Switch to photo mode with the given sub-mode, shoot once, then go back to single shots. */
+    private void shoot(dji.common.camera.SettingsDefinitions.ShootPhotoMode mode,
+                       dji.common.camera.SettingsDefinitions.PhotoBurstCount burst,
+                       dji.common.camera.SettingsDefinitions.PhotoPanoramaMode panoMode, String done) {
+        dji.sdk.camera.Camera cam = camera();
+        if (cam == null) {
+            toast("Drone not connected.");
+            return;
+        }
+        Runnable fire = () -> cam.startShootPhoto(err -> runOnUiThread(() -> {
+            if (err != null) {
+                toast("Camera: " + err.getDescription());
+            } else {
+                toast(done);
+                VoiceAlerts.get(this).say("shot", mode == dji.common.camera.SettingsDefinitions.ShootPhotoMode.PANORAMA
+                        ? "Panorama started." : "Photo taken.", 1000);
+            }
+            if (mode == dji.common.camera.SettingsDefinitions.ShootPhotoMode.BURST) {
+                parentView.postDelayed(() -> cam.setShootPhotoMode(
+                        dji.common.camera.SettingsDefinitions.ShootPhotoMode.SINGLE, null), 4000);
+            }
+        }));
+        cam.setMode(dji.common.camera.SettingsDefinitions.CameraMode.SHOOT_PHOTO, e1 -> {
+            cam.setShootPhotoMode(mode, e2 -> {
+                if (e2 != null) {
+                    runOnUiThread(() -> toast("This camera doesn't support that mode: " + e2.getDescription()));
+                    return;
+                }
+                if (burst != null) cam.setPhotoBurstCount(burst, e3 -> fire.run());
+                else if (panoMode != null) cam.setPhotoPanoramaMode(panoMode, e3 -> {
+                    if (e3 != null) runOnUiThread(() -> toast("Panorama type not supported: " + e3.getDescription()));
+                    else fire.run();
+                });
+                else fire.run();
+            });
         });
     }
 
@@ -493,6 +740,8 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     @Override
     public void onTelemetry(Telemetry.Snapshot s) {
         if (s.flying && !wasFlying) flightStartedAt = System.currentTimeMillis();
+        updateHomePanel(s);
+        updateReadyCard(s);
         if (!s.flying && wasFlying) onLanded();
         wasFlying = s.flying;
         mapWidget.update(s);
@@ -648,6 +897,10 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         telemetry.addListener(this);
         SmartMove.get(this).setListener(this);
         ActiveTracker.get().setListener(this);
+        Weather.fetch(this, w -> {
+            weather = w;
+            updateReadyCard(Telemetry.get(this).last());
+        });
         moveBanner.setVisibility(SmartMove.get(this).isRunning() || ActiveTracker.get().isRunning()
                 ? View.VISIBLE : View.GONE);
     }

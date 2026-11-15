@@ -5,7 +5,7 @@
     android:background="@color/background_blue"
     android:baselineAligned="false"
     android:orientation="horizontal"
-    android:padding="24dp">
+    android:padding="16dp">
 
     <!-- Left: status -->
     <LinearLayout
@@ -41,6 +41,14 @@
             android:textSize="16sp" />
 
         <TextView
+            android:id="@+id/weather"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+
+        <TextView
             android:id="@+id/last_flight"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -67,7 +75,7 @@
         <Button
             android:id="@+id/btn_fly"
             style="@style/BigButton"
-            android:layout_height="72dp"
+            android:layout_height="64dp"
             android:text="@string/fly"
             android:textSize="24sp" />
 
@@ -83,18 +91,28 @@
         <Button
             android:id="@+id/btn_media"
             style="@style/SecondaryButton"
-            android:layout_marginTop="16dp"
+            android:layout_height="44dp"
+            android:layout_marginTop="12dp"
             android:text="Photos &amp; Videos" />
 
         <Button
             android:id="@+id/btn_log"
             style="@style/SecondaryButton"
+            android:layout_height="44dp"
             android:layout_marginTop="12dp"
             android:text="Flight Log" />
 
         <Button
+            android:id="@+id/btn_batteries"
+            style="@style/SecondaryButton"
+            android:layout_height="44dp"
+            android:layout_marginTop="12dp"
+            android:text="Batteries" />
+
+        <Button
             android:id="@+id/btn_settings"
             style="@style/SecondaryButton"
+            android:layout_height="44dp"
             android:layout_marginTop="12dp"
             android:text="Safety &amp; Settings" />
     </LinearLayout>

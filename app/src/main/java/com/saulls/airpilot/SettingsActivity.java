@@ -62,6 +62,12 @@ public class SettingsActivity extends Activity {
         swImperial.setOnCheckedChangeListener((b, on) -> switchUnits(on));
         swDistLimit.setOnCheckedChangeListener((b, on) -> etMaxDist.setEnabled(on));
 
+        Switch swVoice = findViewById(R.id.sw_voice);
+        swVoice.setChecked(VoiceAlerts.enabled(this));
+        swVoice.setOnCheckedChangeListener((b, on) -> {
+            VoiceAlerts.setEnabled(this, on);
+            if (on) VoiceAlerts.get(this).say("test", "Voice callouts on.", 0);
+        });
         Switch swAuto = findViewById(R.id.sw_auto_download);
         swAuto.setChecked(Prefs.isAutoDownload(this));
         swAuto.setOnCheckedChangeListener((b, on) -> Prefs.setAutoDownload(this, on));

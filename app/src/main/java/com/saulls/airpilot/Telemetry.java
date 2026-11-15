@@ -46,6 +46,15 @@ public final class Telemetry {
         public int batteryPct = -1;
         public double batteryVolts = Double.NaN;
         public double batteryTempC = Double.NaN;
+        public int batteryCycles = -1, batteryFullMah = -1, batteryDesignMah = -1;
+        public String batterySerial;
+        /** SD card: -1 = unknown. */
+        public int sdRemainingMB = -1, sdRecordSecondsLeft = -1;
+        public boolean sdInserted = true, sdFull;
+        /** Return-home estimate: direction relative to the drone's nose (deg), seconds, battery % needed. */
+        public double homeRelBearing = Double.NaN;
+        public int returnSeconds = -1, returnBatteryNeeded = -1;
+        public boolean connected;
         /** When this snapshot was taken (phone clock). */
         public long time = System.currentTimeMillis();
     }
@@ -63,9 +72,19 @@ public final class Telemetry {
     private dji.sdk.battery.Battery batteryAttached;
     private volatile int batteryPct = -1;
     private volatile double batteryVolts = Double.NaN, batteryTempC = Double.NaN;
+    private volatile int batteryCycles = -1, batteryFull = -1, batteryDesign = -1;
+    private volatile String batterySerial;
+    private volatile int sdRemaining = -1, sdRecordSec = -1;
+    private volatile boolean sdInserted = true, sdFull;
+    private dji.sdk.camera.Camera cameraAttached;
+    private final Context appContext;
+    // battery drain tracking for the return estimate
+    private long flightStartMs;
+    private int flightStartPct = -1;
     private volatile Snapshot last = new Snapshot();
 
     private Telemetry(Context context) {
+        appContext = context.getApplicationContext();
         recorder = new FlightRecorder(context.getApplicationContext());
     }
 
@@ -98,10 +117,35 @@ public final class Telemetry {
         dji.sdk.battery.Battery battery = product != null && product.isConnected() ? product.getBattery() : null;
         if (battery != null && battery != batteryAttached) {
             batteryAttached = battery;
+            batterySerial = null;
             battery.setStateCallback(b -> {
                 batteryPct = b.getChargeRemainingInPercent();
                 batteryVolts = b.getVoltage() / 1000.0;
                 batteryTempC = b.getTemperature();
+                batteryCycles = b.getNumberOfDischarges();
+                batteryFull = b.getFullChargeCapacity();
+                batteryDesign = b.getDesignCapacity();
+            });
+            battery.getSerialNumber(new dji.common.util.CommonCallbacks.CompletionCallbackWith<String>() {
+                @Override
+                public void onSuccess(String serial) {
+                    batterySerial = serial;
+                    BatteryBook.seen(appContext, serial, batteryCycles, batteryFull, batteryDesign);
+                }
+
+                @Override
+                public void onFailure(dji.common.error.DJIError error) {
+                }
+            });
+        }
+        dji.sdk.camera.Camera camera = product != null && product.isConnected() ? product.getCamera() : null;
+        if (camera != null && camera != cameraAttached) {
+            cameraAttached = camera;
+            camera.setStorageStateCallBack(st -> {
+                sdInserted = st.isInserted();
+                sdFull = st.isFull();
+                sdRemaining = st.getRemainingSpaceInMB();
+                sdRecordSec = st.getAvailableRecordingTimeInSeconds();
             });
         }
     }
@@ -160,6 +204,16 @@ public final class Telemetry {
         s.batteryPct = batteryPct;
         s.batteryVolts = batteryVolts;
         s.batteryTempC = batteryTempC;
+        s.batteryCycles = batteryCycles;
+        s.batteryFullMah = batteryFull;
+        s.batteryDesignMah = batteryDesign;
+        s.batterySerial = batterySerial;
+        s.sdInserted = sdInserted;
+        s.sdFull = sdFull;
+        s.sdRemainingMB = sdRemaining;
+        s.sdRecordSecondsLeft = sdRecordSec;
+        s.connected = true;
+        estimateReturn(s);
 
         LocationCoordinate2D home = state.getHomeLocation();
         recorder.update(s, state.isHomeLocationSet() && home != null ? home.getLatitude() : Double.NaN,
@@ -167,8 +221,43 @@ public final class Telemetry {
 
         last = s;
         main.post(() -> {
+            VoiceAlerts.get(appContext).onTelemetry(s);
             for (Listener l : listeners) l.onTelemetry(s);
         });
+    }
+
+    /** Direction home (relative to the nose), time to get back and battery it will take. */
+    private void estimateReturn(Snapshot s) {
+        if (s.flying) {
+            if (flightStartMs == 0) {
+                flightStartMs = System.currentTimeMillis();
+                flightStartPct = s.batteryPct;
+            }
+        } else {
+            flightStartMs = 0;
+            flightStartPct = -1;
+        }
+        if (Double.isNaN(s.lat) || Double.isNaN(s.homeLat) || Double.isNaN(s.distanceM)) return;
+        double dE = (s.homeLng - s.lng) * Math.cos(Math.toRadians(s.lat)) * 111320.0;
+        double dN = (s.homeLat - s.lat) * 110574.0;
+        double bearingHome = Math.toDegrees(Math.atan2(dE, dN));
+        if (!Double.isNaN(s.yaw)) {
+            double rel = (bearingHome - s.yaw) % 360;
+            if (rel > 180) rel -= 360;
+            if (rel < -180) rel += 360;
+            s.homeRelBearing = rel;
+        }
+        double alt = Double.isNaN(s.altitudeM) ? 0 : Math.max(0, s.altitudeM);
+        int seconds = (int) Math.round(s.distanceM / 8.0 + alt / 3.0 + 10); // ~8 m/s home, ~3 m/s down
+        s.returnSeconds = seconds;
+        // % per second: measured this flight, or a typical Mavic Air rate (~20 min per pack).
+        double rate = 0.09;
+        long elapsed = (System.currentTimeMillis() - flightStartMs) / 1000;
+        if (flightStartMs > 0 && elapsed > 90 && flightStartPct > 0 && s.batteryPct >= 0
+                && flightStartPct > s.batteryPct) {
+            rate = Math.max(0.05, (flightStartPct - s.batteryPct) / (double) elapsed);
+        }
+        s.returnBatteryNeeded = (int) Math.ceil(seconds * rate * 1.3 + 3);
     }
 
     /** 0-5 like DJI's bars, or -1 when there's no GPS at all. */

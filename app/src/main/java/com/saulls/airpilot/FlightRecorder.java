@@ -53,6 +53,8 @@ public final class FlightRecorder {
         public int batteryEnd = -1;
         public int minSatellites = -1;
         public String track; // file name in files/flights, or null for old flights
+        public String batterySerial;
+        public double batteryMaxTempC = Double.NaN;
         public List<String> modes = new ArrayList<>();
         public List<String> warnings = new ArrayList<>();
 
@@ -71,6 +73,8 @@ public final class FlightRecorder {
             o.put("b1", batteryEnd);
             o.put("sats", minSatellites);
             if (track != null) o.put("track", track);
+            if (batterySerial != null) o.put("bserial", batterySerial);
+            if (!Double.isNaN(batteryMaxTempC)) o.put("btmax", batteryMaxTempC);
             o.put("modes", new JSONArray(modes));
             o.put("warn", new JSONArray(warnings));
             return o;
@@ -89,6 +93,8 @@ public final class FlightRecorder {
             f.batteryEnd = o.optInt("b1", -1);
             f.minSatellites = o.optInt("sats", -1);
             f.track = o.has("track") ? o.optString("track") : null;
+            f.batterySerial = o.has("bserial") ? o.optString("bserial") : null;
+            f.batteryMaxTempC = o.optDouble("btmax", Double.NaN);
             JSONArray m = o.optJSONArray("modes");
             if (m != null) for (int i = 0; i < m.length(); i++) f.modes.add(m.optString(i));
             JSONArray w = o.optJSONArray("warn");
@@ -105,6 +111,7 @@ public final class FlightRecorder {
     private Flight current;
     private BufferedWriter writer;
     private long lastSample;
+    private int lastCycles = -1, lastFull = -1, lastDesign = -1;
     private final Set<String> modes = new LinkedHashSet<>();
     private final Set<String> warnings = new LinkedHashSet<>();
     private static final SimpleDateFormat UTC = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
@@ -134,6 +141,13 @@ public final class FlightRecorder {
                 f.homeLat = homeLat;
                 f.homeLng = homeLng;
             }
+            if (s.batterySerial != null) f.batterySerial = s.batterySerial;
+            if (!Double.isNaN(s.batteryTempC)) {
+                f.batteryMaxTempC = Double.isNaN(f.batteryMaxTempC) ? s.batteryTempC : Math.max(f.batteryMaxTempC, s.batteryTempC);
+            }
+            lastCycles = s.batteryCycles;
+            lastFull = s.batteryFullMah;
+            lastDesign = s.batteryDesignMah;
             if (s.batteryPct >= 0) {
                 if (f.batteryStart < 0) f.batteryStart = s.batteryPct;
                 f.batteryEnd = s.batteryPct;
@@ -229,7 +243,13 @@ public final class FlightRecorder {
         }
         writer = null;
         if (f.durationS >= 5) {
+            if (f.batteryMaxTempC >= 60) f.warnings.add("Battery got hot (" + Math.round(f.batteryMaxTempC) + "°C). Let it cool before charging or reusing.");
             save(f);
+            if (f.batterySerial != null) {
+                BatteryBook.flight(context, f.batterySerial, f.durationS, f.batteryMaxTempC,
+                        f.batteryStart >= 0 && f.batteryEnd >= 0 ? f.batteryStart - f.batteryEnd : -1,
+                        lastCycles, lastFull, lastDesign);
+            }
             File t = f.trackFile(context);
             if (t != null && t.exists()) DriveSync.enqueueFile(context, t, FlightExportName.of(f) + ".csv");
         } else if (f.track != null) {
