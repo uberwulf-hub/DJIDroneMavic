@@ -68,6 +68,14 @@ public class SettingsActivity extends Activity {
             VoiceAlerts.setEnabled(this, on);
             if (on) VoiceAlerts.get(this).say("test", "Voice callouts on.", 0);
         });
+        Switch swCasual = findViewById(R.id.sw_voice_casual);
+        swCasual.setChecked(VoiceAlerts.casual(this));
+        swCasual.setOnCheckedChangeListener((b, on) -> {
+            VoiceAlerts.setCasual(this, on);
+            VoiceAlerts va = VoiceAlerts.get(this);
+            va.say("styletest", va.line("Standard voice style.",
+                    "Casual mode on. I'll keep it chill.", "Casual mode. Let's have some fun up there."), 0);
+        });
         Switch swByDate = findViewById(R.id.sw_by_date);
         swByDate.setChecked(Prefs.byDate(this));
         swByDate.setOnCheckedChangeListener((b, on) -> Prefs.setByDate(this, on));

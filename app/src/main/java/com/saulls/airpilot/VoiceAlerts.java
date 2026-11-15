@@ -29,6 +29,23 @@ public final class VoiceAlerts {
         context = c;
     }
 
+    private final java.util.Random random = new java.util.Random();
+
+    /** "casual" (default, a bit of humour) or "standard" (plain). */
+    public static boolean casual(Context c) {
+        return !"standard".equals(Prefs.raw(c).getString("voice_style", "casual"));
+    }
+
+    public static void setCasual(Context c, boolean on) {
+        Prefs.raw(c).edit().putString("voice_style", on ? "casual" : "standard").apply();
+    }
+
+    /** Standard wording, or one of the casual lines at random. */
+    public String line(String standard, String... casualLines) {
+        if (!casual(context) || casualLines.length == 0) return standard;
+        return casualLines[random.nextInt(casualLines.length)];
+    }
+
     public static boolean enabled(Context c) {
         return Prefs.raw(c).getBoolean("voice_alerts", true);
     }
@@ -144,20 +161,27 @@ public final class VoiceAlerts {
         prev = s;
         if (p == null) return;
 
-        if (Double.isNaN(p.homeLat) && !Double.isNaN(s.homeLat)) say("home", "Home point recorded.", 60_000);
+        if (Double.isNaN(p.homeLat) && !Double.isNaN(s.homeLat)) say("home", line("Home point recorded.",
+                "Home point locked in. I know where we live now.",
+                "Got the home point. If things get weird, I know the way back.",
+                "Home point saved. Let's go have some fun."), 60_000);
         if (!p.flying && s.flying) {
             lastBatteryCallout = 101;
             headHomeSaid = false;
         }
         if (p.flying && !s.flying) {
-            say("landed", "Landed. Flight time " + spokenDuration(s.flightTimeS) + ".", 10_000);
+            String t = spokenDuration(s.flightTimeS);
+            say("landed", line("Landed. Flight time " + t + ".",
+                    "Touchdown! " + t + " in the air. Nice flying.",
+                    "And we're down. " + t + " of flight. Smooth.",
+                    "Landed safe and sound after " + t + ". The ground missed me."), 10_000);
         }
         if (s.flying) {
             if (s.batteryPct > 0) {
                 for (int level : new int[]{50, 30, 20, 15, 10}) {
                     if (s.batteryPct <= level && lastBatteryCallout > level) {
                         lastBatteryCallout = level;
-                        say("batt", "Battery " + s.batteryPct + " percent.", 5_000);
+                        say("batt", batteryLine(s.batteryPct), 5_000);
                         break;
                     }
                 }
@@ -165,16 +189,53 @@ public final class VoiceAlerts {
             if (!headHomeSaid && s.returnBatteryNeeded > 0 && s.batteryPct > 0 && !s.goingHome
                     && s.batteryPct - s.returnBatteryNeeded <= 8 && s.distanceM > 30) {
                 headHomeSaid = true;
-                say("headhome", "Time to head home. About " + spokenDuration(s.returnSeconds) + " to get back.", 60_000);
+                String t = spokenDuration(s.returnSeconds);
+                say("headhome", line("Time to head home. About " + t + " to get back.",
+                        "Heads up, it's about " + t + " back to base. Now's a good time to turn around.",
+                        "Time to head home. It's about " + t + " back, and I'd like to make it.",
+                        "Just saying, home is about " + t + " away and my battery agrees we should go."), 60_000);
             }
-            if (!p.lowBattery && s.lowBattery) say("low", "Low battery. Return home soon.", 30_000);
-            if (!p.criticalBattery && s.criticalBattery) say("crit", "Critical battery. The drone will land.", 30_000);
-            if (!p.goingHome && s.goingHome) say("rth", "Returning home.", 15_000);
-            if (!p.compassError && s.compassError) say("compass", "Compass interference. Fly carefully.", 30_000);
-            if (p.gpsLevel >= 2 && s.gpsLevel >= 0 && s.gpsLevel <= 1) say("gps", "Weak GPS. The drone may drift.", 30_000);
-            if (!p.maxHeightReached && s.maxHeightReached) say("maxh", "Maximum altitude reached.", 30_000);
-            if (!p.maxRadiusReached && s.maxRadiusReached) say("maxr", "Maximum distance reached.", 30_000);
+            if (!p.lowBattery && s.lowBattery) say("low", line("Low battery. Return home soon.",
+                    "Low battery. I'm getting hangry. Bring me home soon.",
+                    "Low battery warning. Snack time is coming up fast.",
+                    "Battery's low. Let's wrap this up and head home."), 30_000);
+            if (!p.criticalBattery && s.criticalBattery) say("crit", line("Critical battery. The drone will land.",
+                    "Critical battery! I'm landing now. Steer me somewhere nice.",
+                    "Critical battery. Gravity is winning this one. Landing now, pick a soft spot.",
+                    "Critical battery! Coming down now. Please, not in the pool."), 30_000);
+            if (!p.goingHome && s.goingHome) say("rth", line("Returning home.",
+                    "Heading home. Put the kettle on.",
+                    "Returning home. Don't wait up.",
+                    "Going home. Hands off the sticks, I've got this."), 15_000);
+            if (!p.compassError && s.compassError) say("compass", line("Compass interference. Fly carefully.",
+                    "Compass interference. Something metal is messing with my sense of direction. Fly gently.",
+                    "My compass is confused. Easy on the sticks for a bit."), 30_000);
+            if (p.gpsLevel >= 2 && s.gpsLevel >= 0 && s.gpsLevel <= 1) say("gps", line("Weak GPS. The drone may drift.",
+                    "GPS is weak. I might wander a bit, keep your thumbs ready.",
+                    "Losing GPS. I may drift with the wind, so stay on the sticks."), 30_000);
+            if (!p.maxHeightReached && s.maxHeightReached) say("maxh", line("Maximum altitude reached.",
+                    "That's as high as I'm allowed to go. Rules are rules.",
+                    "Max altitude. The sky is not the limit, this is."), 30_000);
+            if (!p.maxRadiusReached && s.maxRadiusReached) say("maxr", line("Maximum distance reached.",
+                    "That's the end of my leash. Can't go any farther.",
+                    "Max distance reached. I'm not allowed past this point."), 30_000);
         }
+    }
+
+    private String batteryLine(int pct) {
+        String std = "Battery " + pct + " percent.";
+        if (pct > 40) return line(std,
+                "Battery's at " + pct + " percent. Half a tank, plenty of fun left.",
+                pct + " percent battery. We're halfway through the snacks.");
+        if (pct > 25) return line(std,
+                "Battery's at " + pct + " percent. Start thinking about the scenic route home.",
+                pct + " percent left. Maybe one more cool shot, then home.");
+        if (pct > 17) return line(std,
+                pct + " percent. This is me politely suggesting we head home.",
+                pct + " percent battery. Not panicking, but I'm eyeing the exit.");
+        return line(std,
+                pct + " percent. Okay, now I'm actually asking. Home, please.",
+                pct + " percent. I'd really like to land somewhere that isn't a tree.");
     }
 
     private static String spokenDuration(long seconds) {

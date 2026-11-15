@@ -380,8 +380,11 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
                 toast("Camera: " + err.getDescription());
             } else {
                 toast(done);
-                VoiceAlerts.get(this).say("shot", mode == dji.common.camera.SettingsDefinitions.ShootPhotoMode.PANORAMA
-                        ? "Panorama started." : "Photo taken.", 1000);
+                VoiceAlerts va = VoiceAlerts.get(this);
+                va.say("shot", mode == dji.common.camera.SettingsDefinitions.ShootPhotoMode.PANORAMA
+                        ? va.line("Panorama started.", "Panorama started. Hands off the sticks, I'm doing a little spin.",
+                        "Doing the panorama thing. Hold still, well, I'll hold still.")
+                        : va.line("Photo taken.", "Got it.", "Say cheese. Too late, got it.", "Snap. That's a keeper."), 1000);
             }
             if (mode == dji.common.camera.SettingsDefinitions.ShootPhotoMode.BURST) {
                 parentView.postDelayed(() -> cam.setShootPhotoMode(
