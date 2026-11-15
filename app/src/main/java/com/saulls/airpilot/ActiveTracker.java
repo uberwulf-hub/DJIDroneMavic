@@ -139,52 +139,35 @@ public final class ActiveTracker implements ActiveTrackMissionOperatorListener {
                     : t == ActiveTrackTargetState.CANNOT_CONFIRM ? -1 : 0;
         }
         if (cur == null) return;
-        switch (cur) {
-            case WAITING_FOR_CONFIRMATION:
-                if (!confirmed) {
-                    confirmed = true; // the pilot already chose the subject by drawing the box
-                    op.acceptConfirmation(null);
-                }
-                update("Locking on…", rect, conf);
-                break;
-            case AIRCRAFT_FOLLOWING:
-            case ONLY_CAMERA_FOLLOWING:
-                everTracked = true;
-                startRecordingOnce();
-                update(kind.title + (conf == 1 ? " · subject unclear, stay in view" : " · tracking"), rect, conf);
-                break;
-            case PERFORMING_QUICK_SHOT:
-                everTracked = true;
-                int pct = ts != null ? ts.getCompletionPercentage() : 0;
-                update(kind.title + " · " + pct + "%", rect, conf);
-                break;
-            case FINDING_TRACKED_TARGET:
-            case RECOVERING:
-                update("Lost sight of the subject, searching…", rect, conf);
-                break;
-            case DETECTING_HUMAN:
-            case AUTO_SENSING:
-            case AUTO_SENSING_FOR_QUICK_SHOT:
-                update("Looking for the person…", rect, conf);
-                break;
-            case CANNOT_CONFIRM:
-                update("Can't lock on. Try a box around the whole person, closer to the drone.", rect, -1);
-                break;
-            case CANNOT_START:
-            case NOT_SUPPORT:
-                String why = e.getError() != null ? e.getError().getDescription()
-                        : (ts != null && ts.getReason() != null ? ts.getReason().name() : cur.name());
-                end((cur == ActiveTrackState.NOT_SUPPORT ? "Not supported here: " : "Can't start: ") + readable(why));
-                break;
-            case IDLE:
-            case WAITING_FOR_SELECT:
-                if (everTracked) end(kind.isQuickShot() ? kind.title + " finished." : "Tracking ended.");
-                break;
-            case DISCONNECTED:
-                end("Lost connection to the drone.");
-                break;
-            default:
-                break;
+        if (cur == ActiveTrackState.WAITING_FOR_CONFIRMATION) {
+            if (!confirmed) {
+                confirmed = true; // the pilot already chose the subject by drawing the box
+                op.acceptConfirmation(null);
+            }
+            update("Locking on…", rect, conf);
+        } else if (cur == ActiveTrackState.AIRCRAFT_FOLLOWING || cur == ActiveTrackState.ONLY_CAMERA_FOLLOWING) {
+            everTracked = true;
+            startRecordingOnce();
+            update(kind.title + (conf == 1 ? " · subject unclear, stay in view" : " · tracking"), rect, conf);
+        } else if (cur == ActiveTrackState.PERFORMING_QUICK_SHOT) {
+            everTracked = true;
+            int pct = ts != null ? ts.getCompletionPercentage() : 0;
+            update(kind.title + " · " + pct + "%", rect, conf);
+        } else if (cur == ActiveTrackState.FINDING_TRACKED_TARGET || cur == ActiveTrackState.RECOVERING) {
+            update("Lost sight of the subject, searching…", rect, conf);
+        } else if (cur == ActiveTrackState.DETECTING_HUMAN || cur == ActiveTrackState.AUTO_SENSING
+                || cur == ActiveTrackState.AUTO_SENSING_FOR_QUICK_SHOT) {
+            update("Looking for the person…", rect, conf);
+        } else if (cur == ActiveTrackState.CANNOT_CONFIRM) {
+            update("Can't lock on. Try a box around the whole person, closer to the drone.", rect, -1);
+        } else if (cur == ActiveTrackState.CANNOT_START || cur == ActiveTrackState.NOT_SUPPORT) {
+            String why = e.getError() != null ? e.getError().getDescription()
+                    : (ts != null && ts.getReason() != null ? String.valueOf(ts.getReason()) : String.valueOf(cur));
+            end((cur == ActiveTrackState.NOT_SUPPORT ? "Not supported here: " : "Can't start: ") + readable(why));
+        } else if (cur == ActiveTrackState.IDLE || cur == ActiveTrackState.WAITING_FOR_SELECT) {
+            if (everTracked) end(kind.isQuickShot() ? kind.title + " finished." : "Tracking ended.");
+        } else if (cur == ActiveTrackState.DISCONNECTED) {
+            end("Lost connection to the drone.");
         }
     }
 
