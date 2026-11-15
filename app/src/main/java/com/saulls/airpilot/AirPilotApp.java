@@ -19,6 +19,7 @@ public class AirPilotApp extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        CrashReporter.install(this);
         BroadcastReceiver receiver = new OnDJIUSBAttachedReceiver();
         IntentFilter filter = new IntentFilter();
         filter.addAction(DJIConnectionControlActivity.ACCESSORY_ATTACHED);

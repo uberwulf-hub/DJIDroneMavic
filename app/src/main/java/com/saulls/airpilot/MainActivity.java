@@ -105,6 +105,7 @@ public class MainActivity extends Activity {
         resumed = true;
         refreshProductStatus();
         refreshSummary();
+        CrashReporter.offerIfNew(this);
         Weather.fetch(this, w -> {
             TextView wt = findViewById(R.id.weather);
             if (w == null) {

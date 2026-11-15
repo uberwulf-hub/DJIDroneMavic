@@ -79,6 +79,7 @@ public class SettingsActivity extends Activity {
         Switch swByDate = findViewById(R.id.sw_by_date);
         swByDate.setChecked(Prefs.byDate(this));
         swByDate.setOnCheckedChangeListener((b, on) -> Prefs.setByDate(this, on));
+        findViewById(R.id.btn_crash).setOnClickListener(v -> CrashReporter.show(this));
         findViewById(R.id.btn_voice).setOnClickListener(v -> chooseVoice());
         VoiceAlerts.get(this).onReady(this::refreshVoiceLabel);
         Switch swAuto = findViewById(R.id.sw_auto_download);
