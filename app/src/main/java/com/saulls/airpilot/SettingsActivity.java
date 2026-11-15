@@ -68,6 +68,11 @@ public class SettingsActivity extends Activity {
             VoiceAlerts.setEnabled(this, on);
             if (on) VoiceAlerts.get(this).say("test", "Voice callouts on.", 0);
         });
+        Switch swByDate = findViewById(R.id.sw_by_date);
+        swByDate.setChecked(Prefs.byDate(this));
+        swByDate.setOnCheckedChangeListener((b, on) -> Prefs.setByDate(this, on));
+        findViewById(R.id.btn_voice).setOnClickListener(v -> chooseVoice());
+        VoiceAlerts.get(this).onReady(this::refreshVoiceLabel);
         Switch swAuto = findViewById(R.id.sw_auto_download);
         swAuto.setChecked(Prefs.isAutoDownload(this));
         swAuto.setOnCheckedChangeListener((b, on) -> Prefs.setAutoDownload(this, on));
@@ -76,6 +81,61 @@ public class SettingsActivity extends Activity {
         updateUnitLabels();
         saveButton.setOnClickListener(v -> saveToDrone());
         loadFromDrone();
+    }
+
+    // ------------------------------------------------------------ voice
+
+    private void refreshVoiceLabel() {
+        String name = VoiceAlerts.voiceName(this);
+        String text = "Voice: phone default";
+        java.util.List<android.speech.tts.Voice> voices = VoiceAlerts.get(this).englishVoices();
+        for (int i = 0; i < voices.size(); i++) {
+            if (voices.get(i).getName().equals(name)) text = "Voice: " + VoiceAlerts.label(voices.get(i), i + 1);
+        }
+        ((TextView) findViewById(R.id.voice_label)).setText(text);
+    }
+
+    private void chooseVoice() {
+        VoiceAlerts va = VoiceAlerts.get(this);
+        va.onReady(() -> {
+            java.util.List<android.speech.tts.Voice> voices = va.englishVoices();
+            String[] items = new String[voices.size() + 1];
+            items[0] = "Phone default";
+            int checked = 0;
+            String current = VoiceAlerts.voiceName(this);
+            for (int i = 0; i < voices.size(); i++) {
+                items[i + 1] = VoiceAlerts.label(voices.get(i), i + 1);
+                if (voices.get(i).getName().equals(current)) checked = i + 1;
+            }
+            final int[] pick = {checked};
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Voice (tap to hear it)")
+                    .setSingleChoiceItems(items, checked, (d, which) -> {
+                        pick[0] = which;
+                        if (which > 0) va.preview(voices.get(which - 1));
+                    })
+                    .setPositiveButton("Use this voice", (d, w) -> {
+                        va.setVoice(pick[0] == 0 ? "" : voices.get(pick[0] - 1).getName());
+                        refreshVoiceLabel();
+                    })
+                    .setNeutralButton("Get more voices", (d, w) -> {
+                        va.setVoice(VoiceAlerts.voiceName(this)); // undo preview
+                        try {
+                            startActivity(new android.content.Intent("com.android.settings.TTS_SETTINGS"));
+                        } catch (Exception e) {
+                            startActivity(new android.content.Intent(
+                                    android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA));
+                        }
+                    })
+                    .setNegativeButton("Cancel", (d, w) -> va.setVoice(VoiceAlerts.voiceName(this)))
+                    .show();
+        });
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        VoiceAlerts.get(this).onReady(this::refreshVoiceLabel);
     }
 
     // ------------------------------------------------------------ Google Drive

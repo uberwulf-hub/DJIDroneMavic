@@ -57,6 +57,15 @@ public final class Prefs {
         sp(c).edit().putBoolean("auto_download", v).apply();
     }
 
+    /** Put downloads (and Drive uploads) in a folder per day. */
+    public static boolean byDate(Context c) {
+        return sp(c).getBoolean("folders_by_date", true);
+    }
+
+    public static void setByDate(Context c, boolean v) {
+        sp(c).edit().putBoolean("folders_by_date", v).apply();
+    }
+
     static SharedPreferences raw(Context c) {
         return sp(c);
     }

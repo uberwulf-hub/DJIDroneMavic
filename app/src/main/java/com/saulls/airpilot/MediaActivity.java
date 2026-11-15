@@ -509,7 +509,7 @@ public class MediaActivity extends Activity {
                     File downloaded = findDownloaded(tempDir, baseName, path);
                     try {
                         if (downloaded == null) throw new java.io.IOException("downloaded file not found");
-                        Uri uri = GallerySaver.save(MediaActivity.this, downloaded);
+                        Uri uri = GallerySaver.save(MediaActivity.this, downloaded, file.getTimeCreated());
                         ui(() -> markSaved(file, uri));
                     } catch (Exception e) {
                         synchronized (failures) {
@@ -581,7 +581,8 @@ public class MediaActivity extends Activity {
 
         int count = savedUris.size();
         String summary = count + (count == 1 ? " file" : " files")
-                + " saved to your gallery in the \"" + GallerySaver.ALBUM + "\" album.";
+                + " saved to your gallery in the \"" + GallerySaver.ALBUM + "\" album"
+                + (Prefs.byDate(this) ? ", in a folder for each day." : ".");
         if (cancelRequested) summary = "Cancelled. " + summary;
         AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle("Download finished");
         if (failures.isEmpty()) {
@@ -623,7 +624,7 @@ public class MediaActivity extends Activity {
 
     private void markSaved(MediaFile f, Uri uri) {
         savedUris.add(uri);
-        DriveSync.enqueue(this, uri, f.getFileName());
+        DriveSync.enqueue(this, uri, f.getFileName(), GallerySaver.subFolder(this, f.getTimeCreated()));
         saved.add(key(f));
         SharedPreferences.Editor e = Prefs.raw(this).edit();
         e.putStringSet(SAVED_KEY, new HashSet<>(saved));

@@ -77,8 +77,26 @@
             </LinearLayout>
 
             <LinearLayout style="@style/SettingRow">
+                <TextView android:id="@+id/voice_label" style="@style/SettingLabel" android:text="Voice" />
+                <Button
+                    android:id="@+id/btn_voice"
+                    style="@style/SecondaryButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:paddingLeft="14dp"
+                    android:paddingRight="14dp"
+                    android:text="Choose voice"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingRow">
                 <TextView style="@style/SettingLabel" android:text="Download new photos &amp; videos after landing" />
                 <Switch android:id="@+id/sw_auto_download" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView style="@style/SettingLabel" android:text="Sort downloads into a folder for each day" />
+                <Switch android:id="@+id/sw_by_date" android:layout_width="wrap_content" android:layout_height="wrap_content" />
             </LinearLayout>
 
             <!-- ===== Google Drive ===== -->

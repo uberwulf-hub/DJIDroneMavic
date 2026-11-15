@@ -74,7 +74,10 @@ public class DriveUploadWorker extends Worker {
             String name = item.optString("name");
             foreground("Uploading " + name + " (" + left + " left)");
             try {
-                String folderId = folderId(c, token);
+                String path = DriveSync.folder(c);
+                String sub = item.optString("sub", "");
+                if (!sub.isEmpty()) path = path + "/" + sub;
+                String folderId = folderId(c, token, path);
                 upload(c, token, item, folderId);
                 DriveSync.pop(c);
                 done++;
@@ -89,7 +92,7 @@ public class DriveUploadWorker extends Worker {
                 DriveSync.setStatus(c, "Google sign-in expired; retrying");
                 return Result.retry();
             } catch (FolderGoneException e) {
-                Prefs.raw(c).edit().remove("drive_folder_id").apply();
+                Prefs.raw(c).edit().remove("drive_folder_ids").apply();
                 return Result.retry();
             } catch (Exception e) {
                 DriveSync.setStatus(c, "Upload paused: " + e.getMessage() + " (will retry)");
@@ -114,11 +117,16 @@ public class DriveUploadWorker extends Worker {
         }
     }
 
-    /** Finds (or creates) the chosen folder path, e.g. "Drone/Air Pilot". */
-    private String folderId(Context c, String token) throws IOException {
-        String path = DriveSync.folder(c);
-        String cached = Prefs.raw(c).getString("drive_folder_id", null);
-        if (cached != null && path.equals(Prefs.raw(c).getString("drive_folder_for", null))) return cached;
+    /** Finds (or creates) a folder path, e.g. "Drone/Air Pilot/2026-11-14". Remembers the ids. */
+    private String folderId(Context c, String token, String path) throws IOException {
+        JSONObject cache;
+        try {
+            cache = new JSONObject(Prefs.raw(c).getString("drive_folder_ids", "{}"));
+        } catch (Exception e) {
+            cache = new JSONObject();
+        }
+        String cached = cache.optString(path, null);
+        if (cached != null && !cached.isEmpty()) return cached;
 
         String parent = "root";
         for (String part : path.split("/")) {
@@ -142,7 +150,11 @@ public class DriveUploadWorker extends Worker {
                         meta.toString().getBytes(StandardCharsets.UTF_8))).optString("id");
             }
         }
-        Prefs.raw(c).edit().putString("drive_folder_id", parent).putString("drive_folder_for", path).apply();
+        try {
+            cache.put(path, parent);
+        } catch (Exception ignored) {
+        }
+        Prefs.raw(c).edit().putString("drive_folder_ids", cache.toString()).apply();
         return parent;
     }
 

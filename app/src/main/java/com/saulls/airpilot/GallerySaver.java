@@ -38,9 +38,22 @@ final class GallerySaver {
         return "image/jpeg";
     }
 
+    /** Folder name for a capture date, e.g. "2026-11-14" (sorts in date order). */
+    static String dateFolder(long takenMillis) {
+        return new java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                .format(new java.util.Date(takenMillis > 0 ? takenMillis : System.currentTimeMillis()));
+    }
+
+    /** Sub-folder under the Air Pilot album for this capture date (or none if turned off). */
+    static String subFolder(Context context, long takenMillis) {
+        return Prefs.byDate(context) ? dateFolder(takenMillis) : null;
+    }
+
     /** Copies {@code source} into the gallery and returns the gallery Uri. */
-    static Uri save(Context context, File source) throws IOException {
+    static Uri save(Context context, File source, long takenMillis) throws IOException {
         String name = source.getName();
+        String sub = subFolder(context, takenMillis);
+        String album = sub == null ? ALBUM : ALBUM + "/" + sub;
         boolean video = isVideo(name);
         String mime = mimeType(name);
 
@@ -53,7 +66,7 @@ final class GallerySaver {
             values.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
             values.put(MediaStore.MediaColumns.MIME_TYPE, mime);
             values.put(MediaStore.MediaColumns.RELATIVE_PATH,
-                    (video ? Environment.DIRECTORY_MOVIES : Environment.DIRECTORY_PICTURES) + "/" + ALBUM);
+                    (video ? Environment.DIRECTORY_MOVIES : Environment.DIRECTORY_PICTURES) + "/" + album);
             values.put(MediaStore.MediaColumns.IS_PENDING, 1);
             Uri uri = resolver.insert(collection, values);
             if (uri == null) throw new IOException("Phone storage refused the file");
@@ -74,7 +87,7 @@ final class GallerySaver {
         // Android 9 and older: write to the public folder and tell the gallery about it.
         @SuppressWarnings("deprecation")
         File dir = new File(Environment.getExternalStoragePublicDirectory(
-                video ? Environment.DIRECTORY_MOVIES : Environment.DIRECTORY_PICTURES), ALBUM);
+                video ? Environment.DIRECTORY_MOVIES : Environment.DIRECTORY_PICTURES), album);
         if (!dir.exists() && !dir.mkdirs()) throw new IOException("Could not create " + dir);
         File dest = new File(dir, name);
         try (InputStream in = new FileInputStream(source); OutputStream out = new FileOutputStream(dest)) {

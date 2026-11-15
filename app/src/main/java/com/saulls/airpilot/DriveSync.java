@@ -60,7 +60,7 @@ public final class DriveSync {
     public static void setFolder(Context c, String path) {
         String clean = path == null ? "" : path.trim().replaceAll("/+", "/").replaceAll("^/|/$", "");
         if (clean.isEmpty()) clean = "Air Pilot";
-        Prefs.raw(c).edit().putString("drive_folder", clean).remove("drive_folder_id").remove("drive_folder_for").apply();
+        Prefs.raw(c).edit().putString("drive_folder", clean).remove("drive_folder_ids").apply();
     }
 
     public static boolean wifiOnly(Context c) {
@@ -102,24 +102,24 @@ public final class DriveSync {
 
     public static void signOut(Context c) {
         client(c).signOut();
-        Prefs.raw(c).edit().remove("drive_folder_id").remove("drive_folder_for").apply();
+        Prefs.raw(c).edit().remove("drive_folder_ids").apply();
     }
 
     // ------------------------------------------------------------ queue
 
     /** Queue a gallery item (from Photos & Videos) for upload. */
-    public static void enqueue(Context c, Uri uri, String name) {
+    public static void enqueue(Context c, Uri uri, String name, String subFolder) {
         if (!isEnabled(c)) return;
-        add(c, "uri", uri.toString(), name, GallerySaver.mimeType(name));
+        add(c, "uri", uri.toString(), name, GallerySaver.mimeType(name), subFolder);
     }
 
     /** Queue a file on the phone (flight log CSV) for upload. */
     public static void enqueueFile(Context c, File file, String name) {
         if (!isEnabled(c) || !uploadLogs(c)) return;
-        add(c, "file", file.getAbsolutePath(), name, "text/csv");
+        add(c, "file", file.getAbsolutePath(), name, "text/csv", "Flight logs");
     }
 
-    private static synchronized void add(Context c, String kind, String src, String name, String mime) {
+    private static synchronized void add(Context c, String kind, String src, String name, String mime, String sub) {
         try {
             JSONArray arr = pending(c);
             JSONObject o = new JSONObject();
@@ -127,6 +127,7 @@ public final class DriveSync {
             o.put("src", src);
             o.put("name", name);
             o.put("mime", mime);
+            if (sub != null && !sub.isEmpty()) o.put("sub", sub);
             arr.put(o);
             Prefs.raw(c).edit().putString(KEY_PENDING, arr.toString()).apply();
         } catch (JSONException ignored) {
