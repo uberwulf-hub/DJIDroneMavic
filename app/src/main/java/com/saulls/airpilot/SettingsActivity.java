@@ -89,7 +89,60 @@ public class SettingsActivity extends Activity {
 
         updateUnitLabels();
         saveButton.setOnClickListener(v -> saveToDrone());
+        setupBand();
         loadFromDrone();
+    }
+
+    // ------------------------------------------------------------ video link band
+
+    private boolean bandLoading;
+
+    private dji.sdk.airlink.WiFiLink wifiLink() {
+        dji.sdk.base.BaseProduct p = dji.sdk.sdkmanager.DJISDKManager.getInstance().getProduct();
+        if (p == null || !p.isConnected() || p.getAirLink() == null || !p.getAirLink().isWiFiLinkSupported()) return null;
+        return p.getAirLink().getWiFiLink();
+    }
+
+    private void setupBand() {
+        android.widget.RadioGroup band = findViewById(R.id.band);
+        TextView status = findViewById(R.id.band_status);
+        dji.sdk.airlink.WiFiLink link = wifiLink();
+        if (link == null) {
+            status.setText("Connect the drone to change this.");
+            for (int i = 0; i < band.getChildCount(); i++) band.getChildAt(i).setEnabled(false);
+            return;
+        }
+        bandLoading = true;
+        link.getFrequencyBand(new dji.common.util.CommonCallbacks.CompletionCallbackWith<dji.common.airlink.WiFiFrequencyBand>() {
+            @Override
+            public void onSuccess(dji.common.airlink.WiFiFrequencyBand b) {
+                runOnUiThread(() -> {
+                    band.check(b == dji.common.airlink.WiFiFrequencyBand.FREQUENCY_BAND_5_GHZ ? R.id.band_58 : R.id.band_24);
+                    status.setText("Now using " + (b == dji.common.airlink.WiFiFrequencyBand.FREQUENCY_BAND_5_GHZ ? "5.8 GHz." : "2.4 GHz."));
+                    bandLoading = false;
+                });
+            }
+
+            @Override
+            public void onFailure(dji.common.error.DJIError e) {
+                runOnUiThread(() -> {
+                    status.setText("Couldn't read the band: " + e.getDescription());
+                    bandLoading = false;
+                });
+            }
+        });
+        band.setOnCheckedChangeListener((g, id) -> {
+            if (bandLoading) return;
+            dji.sdk.airlink.WiFiLink l = wifiLink();
+            if (l == null) return;
+            dji.common.airlink.WiFiFrequencyBand want = id == R.id.band_58
+                    ? dji.common.airlink.WiFiFrequencyBand.FREQUENCY_BAND_5_GHZ
+                    : dji.common.airlink.WiFiFrequencyBand.FREQUENCY_BAND_2_DOT_4_GHZ;
+            status.setText("Switching… the video may drop for a few seconds.");
+            l.setFrequencyBand(want, err -> runOnUiThread(() -> status.setText(err == null
+                    ? "Switched to " + (id == R.id.band_58 ? "5.8 GHz." : "2.4 GHz.")
+                    : "Couldn't switch: " + err.getDescription())));
+        });
     }
 
     // ------------------------------------------------------------ voice

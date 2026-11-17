@@ -34,7 +34,16 @@ import dji.sdk.sdkmanager.DJISDKManager;
  */
 public final class SmartMove {
 
-    public enum Type { ORBIT, DRONIE }
+    public enum Type { ORBIT, DRONIE, FOLLOW_ME, ORBIT_ME }
+
+    static String title(Type t) {
+        switch (t) {
+            case DRONIE: return "Dronie";
+            case FOLLOW_ME: return "Follow me";
+            case ORBIT_ME: return "Orbit me";
+            default: return "Orbit";
+        }
+    }
 
     public interface Listener {
         /** Progress 0..1 (or -1 for continuous). */
@@ -52,6 +61,8 @@ public final class SmartMove {
         public double distanceM = 50;    // dronie
         public double speedMps = 3;
         public boolean recordVideo = true;
+        public double leashM = 12;     // follow me: distance from you
+        public double heightM = 12;    // follow me: height above takeoff
     }
 
     private static final long TICK_MS = 100;           // 10 Hz, DJI needs at least 5 Hz
@@ -84,6 +95,10 @@ public final class SmartMove {
     private double lastAngle = Double.NaN;  // orbit
     private double swept;                   // orbit, degrees
     private boolean directionChecked;       // dronie
+    private boolean usingPhone;
+    private double smoothE = Double.NaN, smoothN = Double.NaN; // phone position, smoothed
+    private long lastGimbalMs;
+    private float lastGimbalPitch = 999;
 
     private SmartMove(Context c) {
         context = c;
@@ -110,24 +125,45 @@ public final class SmartMove {
 
         Telemetry.Snapshot s = Telemetry.get(context).last();
         if (!s.flying) return "Take off first.";
+        if (s.flightMode != null && s.flightMode.toLowerCase(java.util.Locale.US).contains("sport"))
+            return "Switch Sport mode off on the controller first (back to Normal). DJI doesn't allow automatic moves in Sport.";
         if (Double.isNaN(s.lat) || s.satellites < 8 || s.gpsLevel < 3)
             return "Needs a strong GPS signal (P-GPS, 8+ satellites). Right now: " + s.satellites + " satellites.";
         if (s.compassError) return "Compass error. Land and calibrate the compass away from metal first.";
         if (s.goingHome) return "The drone is returning home.";
         if (s.lowBattery || (s.batteryPct >= 0 && s.batteryPct < 25)) return "Battery too low for a move.";
-        double minAlt = p.type == Type.ORBIT ? 5 : 3;
+        boolean phoneMove = p.type == Type.FOLLOW_ME || p.type == Type.ORBIT_ME;
+        double minAlt = p.type == Type.DRONIE ? 3 : p.type == Type.FOLLOW_ME ? 4 : 5;
         if (Double.isNaN(s.altitudeM) || s.altitudeM < minAlt)
             return "Fly higher first (at least " + Units.distance(minAlt, Prefs.isImperial(context)) + ").";
         if (Double.isNaN(s.yaw)) return "Heading not available yet.";
         if (p.type == Type.DRONIE && s.altitudeM + p.distanceM * 0.45 > ALTITUDE_CEILING_M)
             return "Not enough room to climb. Lower the drone or pick a shorter Dronie.";
 
+        android.location.Location me = null;
+        if (phoneMove) {
+            if (!PhoneLocation.get(context).start()) return "Air Pilot needs location permission for this.";
+            me = PhoneLocation.get(context).fresh(5000, 15);
+            if (me == null) {
+                PhoneLocation.get(context).stop();
+                return "Waiting for your phone's GPS. Give it a few seconds outdoors (the phone needs a clear view of the sky), then try again.";
+            }
+        }
         params = p;
         originLat = s.lat;
         originLng = s.lng;
         startYaw = s.yaw;
         startAlt = s.altitudeM;
-        if (p.type == Type.ORBIT) {
+        usingPhone = phoneMove;
+        smoothE = smoothN = Double.NaN;
+        lastGimbalPitch = 999;
+        if (phoneMove) {
+            double dist = Mission.dist2(s.lat, s.lng, me.getLatitude(), me.getLongitude());
+            if (dist > 60) {
+                PhoneLocation.get(context).stop();
+                return "Bring the drone within 200 ft of you first (it's " + Units.distance(dist, Prefs.isImperial(context)) + " away).";
+            }
+        } else if (p.type == Type.ORBIT) {
             // Orbit the spot the camera is facing, radius meters ahead.
             double yawRad = Math.toRadians(startYaw);
             centerE = p.radiusM * Math.sin(yawRad);
@@ -148,7 +184,10 @@ public final class SmartMove {
 
         fc.setVirtualStickModeEnabled(true, error -> {
             if (error != null) {
-                finish("Couldn't take control: " + error.getDescription(), false);
+                String d = error.getDescription() == null ? "" : error.getDescription();
+                finish(d.toLowerCase(java.util.Locale.US).contains("mode")
+                        ? "Couldn't take control: switch Sport mode off on the controller (back to Normal) and try again."
+                        : "Couldn't take control: " + d, false);
                 return;
             }
             if (p.recordVideo) startRecording();
@@ -160,7 +199,7 @@ public final class SmartMove {
                 }
             }, 0, TICK_MS);
         });
-        progress(0, p.type == Type.ORBIT ? "Orbit starting…" : "Dronie starting…");
+        progress(0, title(p.type) + " starting…");
         return null;
     }
 
@@ -199,7 +238,34 @@ public final class SmartMove {
             return;
         }
 
+        if (s.flightMode != null && s.flightMode.toLowerCase(java.util.Locale.US).contains("sport")) {
+            finish("Sport mode was switched on.", false);
+            return;
+        }
         double e = east(s.lng, s.lat), n = north(s.lat);
+        if (usingPhone) {
+            android.location.Location me = PhoneLocation.get(context).fresh(4000, 25);
+            if (me == null) {
+                finish("Lost your phone's GPS; stopped and hovering.", false);
+                return;
+            }
+            double pe = east(me.getLongitude(), me.getLatitude()), pn = north(me.getLatitude());
+            if (Double.isNaN(smoothE)) {
+                smoothE = pe;
+                smoothN = pn;
+            } else {
+                smoothE += 0.35 * (pe - smoothE);
+                smoothN += 0.35 * (pn - smoothN);
+            }
+            if (params.type == Type.FOLLOW_ME) followTick(s, e, n, me);
+            else {
+                centerE = smoothE;
+                centerN = smoothN;
+                orbitTick(s, e, n);
+            }
+            aimGimbalAtPilot(s, Math.hypot(smoothE - e, smoothN - n));
+            return;
+        }
         if (params.type == Type.ORBIT) orbitTick(s, e, n);
         else dronieTick(s, e, n);
     }
@@ -208,7 +274,8 @@ public final class SmartMove {
         double dE = centerE - e, dN = centerN - n;
         double dist = Math.hypot(dE, dN);
         double r = params.radiusM;
-        if (dist < r * 0.5 || dist > r * 1.6 + 3) {
+        boolean lost = usingPhone ? dist > r * 3 + 15 : (dist < r * 0.5 || dist > r * 1.6 + 3);
+        if (lost) {
             finish("Drone left the circle unexpectedly; stopped for safety.", false);
             return;
         }
@@ -227,7 +294,7 @@ public final class SmartMove {
             return;
         }
         float prog = params.continuous ? -1f : (float) (swept / 360.0);
-        progress(prog, "Orbit · " + (params.continuous ? Math.round(swept) + "°" : Math.round(prog * 100) + "%"));
+        progress(prog, title(params.type) + " · " + (params.continuous ? Math.round(swept) + "°" : Math.round(prog * 100) + "%"));
     }
 
     private void dronieTick(Telemetry.Snapshot s, double e, double n) {
@@ -255,6 +322,44 @@ public final class SmartMove {
         send(-params.speedMps, 0, startYaw, climb);
         float prog = (float) (travelled / params.distanceM);
         progress(prog, "Dronie · " + Math.round(prog * 100) + "%");
+    }
+
+    /** Keep a leash distance from the pilot, facing them, at a set height. */
+    private void followTick(Telemetry.Snapshot s, double e, double n, android.location.Location me) {
+        double dE = smoothE - e, dN = smoothN - n;
+        double dist = Math.hypot(dE, dN);
+        if (dist > 80) {
+            finish("You got too far ahead (over 250 ft); stopped and hovering.", false);
+            return;
+        }
+        double bearing = Math.toDegrees(Math.atan2(dE, dN));
+        double forward = 0.9 * (dist - params.leashM);
+        if (me.hasSpeed() && me.hasBearing() && me.getSpeed() > 0.7) {
+            // Feed-forward the pilot's own speed along the line between us.
+            forward += me.getSpeed() * Math.cos(Math.toRadians(me.getBearing() - bearing));
+        }
+        forward = clamp(forward, -3, 10);
+        double up = clamp(0.6 * (params.heightM - s.altitudeM), -1.5, 1.5);
+        if (s.altitudeM + 2 > ALTITUDE_CEILING_M) up = Math.min(up, 0);
+        send(forward, 0, bearing, up);
+        progress(-1f, "Follow me · " + Units.distance(dist, Prefs.isImperial(context)) + " away");
+    }
+
+    /** Tilt the camera so the pilot stays in frame. */
+    private void aimGimbalAtPilot(Telemetry.Snapshot s, double horizontal) {
+        long now = System.currentTimeMillis();
+        if (now - lastGimbalMs < 500 || Double.isNaN(s.altitudeM)) return;
+        float pitch = (float) -Math.toDegrees(Math.atan2(Math.max(0, s.altitudeM - 1.2), Math.max(1, horizontal)));
+        pitch = (float) clamp(pitch, -85, 0);
+        if (Math.abs(pitch - lastGimbalPitch) < 2) return;
+        lastGimbalMs = now;
+        lastGimbalPitch = pitch;
+        BaseProduct p = DJISDKManager.getInstance().getProduct();
+        dji.sdk.gimbal.Gimbal g = p != null ? p.getGimbal() : null;
+        if (g != null) {
+            g.rotate(new dji.common.gimbal.Rotation.Builder()
+                    .mode(dji.common.gimbal.RotationMode.ABSOLUTE_ANGLE).pitch(pitch).time(0.5).build(), null);
+        }
     }
 
     /**
@@ -315,6 +420,10 @@ public final class SmartMove {
             f.setVirtualStickModeEnabled(false, null);
         }
         if (rc != null) rc.setHardwareStateCallback(null);
+        if (usingPhone) {
+            usingPhone = false;
+            PhoneLocation.get(context).stop();
+        }
         if (weStartedRecording && camera != null) {
             main.postDelayed(() -> camera.stopRecordVideo(null), completed ? 1500 : 300);
         }

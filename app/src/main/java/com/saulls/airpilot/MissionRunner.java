@@ -88,6 +88,8 @@ public final class MissionRunner implements WaypointMissionOperatorListener {
         if (Double.isNaN(s.lat) || s.satellites < 10 || s.gpsLevel < 4)
             return "Needs strong GPS (10+ satellites). Right now: " + s.satellites + ".";
         if (Double.isNaN(s.homeLat)) return "Home point isn't set yet.";
+        if (s.flightMode != null && s.flightMode.toLowerCase(java.util.Locale.US).contains("sport"))
+            return "Switch Sport mode off on the controller first (back to Normal).";
         if (s.compassError) return "Compass error. Land and calibrate away from metal first.";
         double fromDrone = Mission.dist2(s.lat, s.lng, m.wps.get(0).lat, m.wps.get(0).lng);
         if (fromDrone > 300) return "The mission starts " + Units.distance(fromDrone, Prefs.isImperial(context))

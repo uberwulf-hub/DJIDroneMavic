@@ -182,6 +182,15 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         });
     }
 
+    /** Re-hooks telemetry every few seconds, so a USB reconnect mid-flight picks right back up. */
+    private final Runnable reattach = new Runnable() {
+        @Override
+        public void run() {
+            Telemetry.get(FlyActivity.this).attach();
+            parentView.postDelayed(this, 3000);
+        }
+    };
+
     // ------------------------------------------------------------ missions
 
     @Override
@@ -515,18 +524,113 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     private void showMovesDialog() {
         if (SmartMove.get(this).isRunning() || ActiveTracker.get().isRunning()) return;
         final ActiveTracker.Kind[] kinds = ActiveTracker.Kind.values();
-        String[] items = new String[kinds.length + 2];
-        for (int i = 0; i < kinds.length; i++) items[i] = "\u25CE  " + kinds[i].title + "  (tracks a person)";
-        items[kinds.length] = "\u21BB  Orbit a spot  (GPS, no subject needed)";
-        items[kinds.length + 1] = "\u2196  Dronie  (GPS, no subject needed)";
+        String[] items = new String[kinds.length + 4];
+        items[0] = "\uD83D\uDEB4  Follow me  (uses your phone's GPS)";
+        items[1] = "\u21BB  Orbit me  (circles your phone's GPS)";
+        items[2] = "\u21BB  Orbit a spot  (the spot the camera faces)";
+        items[3] = "\u2196  Dronie  (fly back and up)";
+        for (int i = 0; i < kinds.length; i++) items[i + 4] = "\u25CE  " + kinds[i].title + "  (DJI vision tracking, experimental)";
         new android.app.AlertDialog.Builder(this)
                 .setTitle("Smart moves")
                 .setItems(items, (d, which) -> {
-                    if (which < kinds.length) confirmTrack(kinds[which]);
-                    else showGpsMoveDialog(which == kinds.length);
+                    if (which == 0) showMeMoveDialog(true);
+                    else if (which == 1) showMeMoveDialog(false);
+                    else if (which < 4) showGpsMoveDialog(which == 2);
+                    else confirmTrack(kinds[which - 4]);
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
+    }
+
+    /** Follow me / Orbit me setup, using the phone's GPS as "you". */
+    private void showMeMoveDialog(boolean follow) {
+        boolean imp = imperial;
+        final double[] sizes = follow ? new double[]{8, 12, 20} : new double[]{5, 8, 12};
+        final double[] heights = {6, 10, 15};
+        String[] sizeNames = new String[3], heightNames = new String[3];
+        for (int i = 0; i < 3; i++) {
+            sizeNames[i] = Units.distance(sizes[i], imp);
+            heightNames[i] = Units.distance(heights[i], imp);
+        }
+        android.widget.LinearLayout box = new android.widget.LinearLayout(this);
+        box.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad = DensityUtil.dip2px(this, 20);
+        box.setPadding(pad, pad / 2, pad, 0);
+        TextView help = new TextView(this);
+        help.setTextColor(0xFFDDDDDD);
+        help.setTextSize(14);
+        help.setText(follow
+                ? "The drone stays behind you at the set distance and height, camera on you, using your phone's GPS. "
+                + "Keep the controller and phone with you. Great for a bike ride or a run.\n\nOpen areas only: "
+                + "the drone can't see obstacles to its sides, so fly high enough to clear trees and wires."
+                : "The drone circles your phone's position with the camera on you. For a cartwheel, set the "
+                + "controller down where you'll be. Keep the area clear.");
+        box.addView(help);
+        TextView l1 = new TextView(this);
+        l1.setText(follow ? "\nDISTANCE BEHIND YOU" : "\nCIRCLE RADIUS");
+        l1.setTextColor(0xFF2F9A9A);
+        box.addView(l1);
+        android.widget.RadioGroup size = radioRow(sizeNames, 1);
+        box.addView(size);
+        android.widget.RadioGroup height = null;
+        if (follow) {
+            TextView l2 = new TextView(this);
+            l2.setText("\nHEIGHT");
+            l2.setTextColor(0xFF2F9A9A);
+            box.addView(l2);
+            height = radioRow(heightNames, 1);
+            box.addView(height);
+        }
+        android.widget.CheckBox record = new android.widget.CheckBox(this);
+        record.setText("Record video");
+        record.setChecked(true);
+        record.setTextColor(0xFFFFFFFF);
+        box.addView(record);
+        final android.widget.RadioGroup heightGroup = height;
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(follow ? "Follow me" : "Orbit me")
+                .setView(box)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Start", (d, w) -> {
+                    SmartMove.Params p = new SmartMove.Params();
+                    p.type = follow ? SmartMove.Type.FOLLOW_ME : SmartMove.Type.ORBIT_ME;
+                    int si = size.indexOfChild(size.findViewById(size.getCheckedRadioButtonId()));
+                    p.leashM = sizes[Math.max(0, si)];
+                    p.radiusM = sizes[Math.max(0, si)];
+                    if (heightGroup != null) {
+                        int hi = heightGroup.indexOfChild(heightGroup.findViewById(heightGroup.getCheckedRadioButtonId()));
+                        p.heightM = heights[Math.max(0, hi)];
+                    }
+                    p.speedMps = 2.5;
+                    p.continuous = true;
+                    p.clockwise = true;
+                    p.recordVideo = record.isChecked();
+                    String problem = SmartMove.get(this).start(p);
+                    logEvent((follow ? "Follow me" : "Orbit me") + (problem == null ? " started" : " couldn't start: " + problem));
+                    if (problem != null) {
+                        new android.app.AlertDialog.Builder(this).setTitle("Can't start").setMessage(problem)
+                                .setPositiveButton("OK", null).show();
+                    } else {
+                        moveText.setText((follow ? "Follow me" : "Orbit me") + " starting…");
+                        moveHint.setText("Move any stick to take over");
+                        moveBanner.setVisibility(View.VISIBLE);
+                    }
+                })
+                .show();
+    }
+
+    private android.widget.RadioGroup radioRow(String[] labels, int checked) {
+        android.widget.RadioGroup g = new android.widget.RadioGroup(this);
+        g.setOrientation(android.widget.RadioGroup.HORIZONTAL);
+        for (int i = 0; i < labels.length; i++) {
+            android.widget.RadioButton b = new android.widget.RadioButton(this);
+            b.setId(View.generateViewId());
+            b.setText(labels[i]);
+            b.setTextColor(0xFFFFFFFF);
+            g.addView(b, new android.widget.RadioGroup.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            if (i == checked) b.setChecked(true);
+        }
+        return g;
     }
 
     private void confirmTrack(ActiveTracker.Kind kind) {
@@ -731,7 +835,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     @Override
     public void onMoveEnded(SmartMove.Type type, String reason, boolean completed) {
         moveBanner.setVisibility(View.GONE);
-        FlightRecorder.event(this, (type == SmartMove.Type.ORBIT ? "Orbit" : "Dronie") + " ended: " + reason);
+        FlightRecorder.event(this, SmartMove.title(type) + " ended: " + reason);
         android.widget.Toast.makeText(this, reason, android.widget.Toast.LENGTH_LONG).show();
     }
 
@@ -1009,6 +1113,8 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         }
         Telemetry telemetry = Telemetry.get(this);
         telemetry.attach();
+        parentView.removeCallbacks(reattach);
+        parentView.postDelayed(reattach, 3000);
         wasFlying = telemetry.last().flying;
         telemetry.addListener(this);
         SmartMove.get(this).setListener(this);
@@ -1026,6 +1132,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     @Override
     protected void onPause() {
         Telemetry.get(this).removeListener(this);
+        parentView.removeCallbacks(reattach);
         SmartMove.get(this).setListener(null);
         ActiveTracker.get().setListener(null);
         MissionRunner.get(this).setListener(null);

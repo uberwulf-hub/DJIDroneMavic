@@ -99,6 +99,9 @@ public final class ActiveTracker implements ActiveTrackMissionOperatorListener {
 
         ActiveTrackMission mission = new ActiveTrackMission(normalizedBox, modeFor(k));
         if (k.isQuickShot()) mission.setQuickShotMode(quickShotFor(k));
+        Telemetry.Snapshot snap = Telemetry.get(context).last();
+        if (snap.flightMode != null && snap.flightMode.toLowerCase(java.util.Locale.US).contains("sport"))
+            return "Switch Sport mode off on the controller first (back to Normal).";
         DJIError can = op.canStartTracking(mission);
         if (can != null) return "Can't start: " + can.getDescription();
 
@@ -109,11 +112,33 @@ public final class ActiveTracker implements ActiveTrackMissionOperatorListener {
         recordVideo = record && !k.isQuickShot(); // QuickShots record by themselves
         op.removeListener(this);
         op.addListener(this);
-        op.setRecommendedConfiguration(err -> op.startTracking(mission, error -> {
-            if (error != null) end("Couldn't start: " + error.getDescription());
-        }));
+        ActiveTrackState st = op.getCurrentState();
+        if (st == ActiveTrackState.NOT_SUPPORT) {
+            running = false;
+            return "DJI doesn't allow ActiveTrack on this drone through other apps. Try Follow me (GPS) or Orbit me (GPS).";
+        }
+        startAttempt(mission, 1);
         update("Locking on…", null, 0);
         return null;
+    }
+
+    /** Try to start; if the drone times out, apply DJI's recommended settings and try once more. */
+    private void startAttempt(ActiveTrackMission mission, int attempt) {
+        op.startTracking(mission, error -> {
+            if (error == null || !running) return;
+            String d = error.getDescription() == null ? "" : error.getDescription();
+            if (attempt == 1) {
+                update("Retrying…", null, 0);
+                op.setRecommendedConfiguration(e2 -> main.postDelayed(() -> {
+                    if (running) startAttempt(mission, 2);
+                }, 1500));
+            } else if (d.toLowerCase(java.util.Locale.US).contains("time")) {
+                end("The drone didn't respond to DJI tracking (timed out twice). The Mavic Air may not support "
+                        + "ActiveTrack from other apps. Use Follow me (GPS) or Orbit me (GPS) instead.");
+            } else {
+                end("Couldn't start: " + d);
+            }
+        });
     }
 
     public void stop() {

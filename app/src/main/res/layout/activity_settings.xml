@@ -197,6 +197,21 @@
                 <EditText android:id="@+id/et_low_batt" style="@style/SettingNumber" />
             </LinearLayout>
 
+            <TextView style="@style/SectionTitle" android:text="VIDEO LINK" />
+            <TextView
+                android:id="@+id/band_hint"
+                style="@style/SettingHint"
+                android:text="If you see &quot;Signal Weak&quot; near houses, try 5.8 GHz: it's usually less crowded than 2.4 GHz (home Wi-Fi). 2.4 GHz reaches farther in open fields." />
+            <RadioGroup
+                android:id="@+id/band"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <RadioButton android:id="@+id/band_24" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="2.4 GHz" android:textColor="#FFFFFF" android:textSize="15sp" />
+                <RadioButton android:id="@+id/band_58" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="5.8 GHz" android:textColor="#FFFFFF" android:textSize="15sp" />
+            </RadioGroup>
+            <TextView android:id="@+id/band_status" style="@style/SettingHint" />
+
             <Button
                 android:id="@+id/btn_save_drone"
                 style="@style/BigButton"
