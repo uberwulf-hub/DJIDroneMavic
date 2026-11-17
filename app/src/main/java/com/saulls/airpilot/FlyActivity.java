@@ -215,6 +215,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         if (m == null) return;
         String problem = MissionRunner.get(this).preflight(m);
         if (problem != null) {
+            logEvent("Mission \"" + m.name + "\" not ready: " + problem);
             new android.app.AlertDialog.Builder(this).setTitle("Not yet").setMessage(problem)
                     .setPositiveButton("OK", null)
                     .setNeutralButton("Remove mission", (d, w) -> {
@@ -232,6 +233,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Start", (d, w) -> {
                     String err = MissionRunner.get(this).start(m);
+                    logEvent("Mission \"" + m.name + "\"" + (err == null ? " started" : " couldn't start: " + err));
                     if (err != null) {
                         new android.app.AlertDialog.Builder(this).setTitle("Can't start").setMessage(err)
                                 .setPositiveButton("OK", null).show();
@@ -256,6 +258,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     @Override
     public void onMissionEnded(Mission m, String reason, boolean completed) {
         moveBanner.setVisibility(View.GONE);
+        FlightRecorder.event(this, "Mission \"" + m.name + "\" ended: " + reason);
         if (completed) {
             pendingMission = null;
             loadPendingMission(null);
@@ -387,6 +390,13 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
 
     private void toast(String t) {
         android.widget.Toast.makeText(this, t, android.widget.Toast.LENGTH_LONG).show();
+        logEvent(t);
+    }
+
+    private String lastTrackStatus;
+
+    private void logEvent(String t) {
+        FlightRecorder.event(this, t);
     }
 
     private void showCameraModes() {
@@ -471,7 +481,8 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
             if (err != null) {
                 toast("Camera: " + err.getDescription());
             } else {
-                toast(done);
+                android.widget.Toast.makeText(this, done, android.widget.Toast.LENGTH_SHORT).show();
+                logEvent(done);
                 VoiceAlerts va = VoiceAlerts.get(this);
                 va.say("shot", mode == dji.common.camera.SettingsDefinitions.ShootPhotoMode.PANORAMA
                         ? va.line("Panorama started.", "Panorama started. Hands off the sticks, I'm doing a little spin.",
@@ -563,6 +574,8 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         android.graphics.RectF norm = toVideo(screenBox);
         String problem = norm == null ? "Live video isn't showing yet."
                 : ActiveTracker.get().start(this, kind, norm, pendingRecord);
+        lastTrackStatus = null;
+        FlightRecorder.event(this, kind.title + (problem == null ? " started" : " couldn't start: " + problem));
         if (problem != null) {
             trackOverlay.setTarget(null, 0);
             new android.app.AlertDialog.Builder(this).setTitle("Can't start").setMessage(problem)
@@ -624,6 +637,11 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     @Override
     public void onTrackUpdate(ActiveTracker.Kind kind, String status, android.graphics.RectF target, int confidence) {
         moveBanner.setVisibility(View.VISIBLE);
+        String key = status.replaceAll("[0-9]+%", "").trim();
+        if (!key.equals(lastTrackStatus)) {
+            lastTrackStatus = key;
+            FlightRecorder.event(this, kind.title + ": " + status);
+        }
         moveText.setText(status);
         if (target != null && target.width() > 0) {
             int color = confidence == 2 ? 0xFF4CAF50 : confidence == 1 ? 0xFFFFC107 : confidence < 0 ? 0xFFE53935 : 0xFFFFFFFF;
@@ -634,6 +652,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     @Override
     public void onTrackEnded(ActiveTracker.Kind kind, String reason) {
         moveBanner.setVisibility(View.GONE);
+        FlightRecorder.event(this, (kind == null ? "Tracking" : kind.title) + " ended: " + reason);
         trackOverlay.setTarget(null, 0);
         android.widget.Toast.makeText(this, reason, android.widget.Toast.LENGTH_LONG).show();
     }
@@ -687,6 +706,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
                     p.continuous = ((android.widget.CheckBox) v.findViewById(R.id.continuous)).isChecked();
                     p.recordVideo = ((android.widget.CheckBox) v.findViewById(R.id.record)).isChecked();
                     String problem = SmartMove.get(this).start(p);
+                    logEvent((orbit ? "Orbit" : "Dronie") + (problem == null ? " started" : " couldn't start: " + problem));
                     if (problem != null) {
                         new android.app.AlertDialog.Builder(this)
                                 .setTitle("Can't start")
@@ -711,6 +731,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     @Override
     public void onMoveEnded(SmartMove.Type type, String reason, boolean completed) {
         moveBanner.setVisibility(View.GONE);
+        FlightRecorder.event(this, (type == SmartMove.Type.ORBIT ? "Orbit" : "Dronie") + " ended: " + reason);
         android.widget.Toast.makeText(this, reason, android.widget.Toast.LENGTH_LONG).show();
     }
 

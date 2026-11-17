@@ -77,15 +77,16 @@ final class FlightExport {
         File summary = new File(exportDir(a), "summary.csv");
         try (PrintWriter w = new PrintWriter(new FileWriter(summary))) {
             w.println("start_local,duration_s,max_alt_m,max_dist_m,max_speed_mps,battery_start_pct,battery_end_pct,"
-                    + "min_satellites,home_lat,home_lng,flight_modes,warnings");
+                    + "min_satellites,home_lat,home_lng,flight_modes,warnings,events");
             SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
             for (FlightRecorder.Flight f : flights) {
-                w.println(String.format(Locale.US, "%s,%d,%.1f,%.1f,%.2f,%d,%d,%d,%s,%s,\"%s\",\"%s\"",
+                w.println(String.format(Locale.US, "%s,%d,%.1f,%.1f,%.2f,%d,%d,%d,%s,%s,\"%s\",\"%s\",\"%s\"",
                         fmt.format(new Date(f.startMillis)), f.durationS, f.maxAltitudeM, f.maxDistanceM,
                         f.maxSpeedMps, f.batteryStart, f.batteryEnd, f.minSatellites,
                         Double.isNaN(f.homeLat) ? "" : String.valueOf(f.homeLat),
                         Double.isNaN(f.homeLng) ? "" : String.valueOf(f.homeLng),
-                        android.text.TextUtils.join("; ", f.modes), android.text.TextUtils.join("; ", f.warnings)));
+                        android.text.TextUtils.join("; ", f.modes), android.text.TextUtils.join("; ", f.warnings),
+                        android.text.TextUtils.join("; ", f.events).replace('"', '\'')));
             }
         }
         try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(out))) {
@@ -95,6 +96,13 @@ final class FlightExport {
                 if (t == null || !t.exists()) continue;
                 addToZip(zip, csv(a, f), baseName(f) + ".csv");
                 addToZip(zip, gpx(a, f), baseName(f) + ".gpx");
+                if (!f.events.isEmpty()) {
+                    File ev = new File(exportDir(a), baseName(f) + "_events.txt");
+                    try (PrintWriter pw = new PrintWriter(new FileWriter(ev))) {
+                        for (String e : f.events) pw.println(e);
+                    }
+                    addToZip(zip, ev, baseName(f) + "_events.txt");
+                }
             }
         }
         return out;

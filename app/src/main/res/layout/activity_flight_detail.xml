@@ -103,6 +103,16 @@
                     android:textColor="#FFD54F"
                     android:textSize="14sp" />
 
+                <TextView
+                    android:id="@+id/events"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:lineSpacingExtra="3dp"
+                    android:textColor="#B3E5FC"
+                    android:textIsSelectable="true"
+                    android:textSize="13sp" />
+
                 <com.saulls.airpilot.TrackChart
                     android:id="@+id/chart_alt"
                     android:layout_width="match_parent"

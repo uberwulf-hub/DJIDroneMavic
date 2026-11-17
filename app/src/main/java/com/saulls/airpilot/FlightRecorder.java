@@ -57,6 +57,8 @@ public final class FlightRecorder {
         public double batteryMaxTempC = Double.NaN;
         public List<String> modes = new ArrayList<>();
         public List<String> warnings = new ArrayList<>();
+        /** App events: moves/tracking/missions, errors shown, photos. "m:ss text" (time into the flight). */
+        public List<String> events = new ArrayList<>();
 
         JSONObject toJson() throws JSONException {
             JSONObject o = new JSONObject();
@@ -77,6 +79,7 @@ public final class FlightRecorder {
             if (!Double.isNaN(batteryMaxTempC)) o.put("btmax", batteryMaxTempC);
             o.put("modes", new JSONArray(modes));
             o.put("warn", new JSONArray(warnings));
+            if (!events.isEmpty()) o.put("events", new JSONArray(events));
             return o;
         }
 
@@ -97,6 +100,8 @@ public final class FlightRecorder {
             f.batteryMaxTempC = o.optDouble("btmax", Double.NaN);
             JSONArray m = o.optJSONArray("modes");
             if (m != null) for (int i = 0; i < m.length(); i++) f.modes.add(m.optString(i));
+            JSONArray ev = o.optJSONArray("events");
+            if (ev != null) for (int i = 0; i < ev.length(); i++) f.events.add(ev.optString(i));
             JSONArray w = o.optJSONArray("warn");
             if (w != null) for (int i = 0; i < w.length(); i++) f.warnings.add(w.optString(i));
             return f;
@@ -118,6 +123,28 @@ public final class FlightRecorder {
 
     static {
         UTC.setTimeZone(TimeZone.getTimeZone("UTC"));
+    }
+
+    private final List<String> pendingEvents = new ArrayList<>();
+    private long pendingSince;
+
+    /** Log something that happened in the app (shown in the flight's details and exports). */
+    public static void event(Context c, String text) {
+        Telemetry.get(c).recorder().addEvent(text);
+    }
+
+    synchronized void addEvent(String text) {
+        if (text == null || text.trim().isEmpty()) return;
+        String clean = text.replace('\n', ' ').trim();
+        if (current != null) {
+            long secs = (System.currentTimeMillis() - current.startMillis) / 1000;
+            if (current.events.size() < 300) current.events.add(Units.duration(secs) + "  " + clean);
+        } else {
+            // On the ground: keep it for the next flight (if that starts within 10 minutes).
+            if (System.currentTimeMillis() - pendingSince > 10 * 60 * 1000L) pendingEvents.clear();
+            pendingSince = System.currentTimeMillis();
+            if (pendingEvents.size() < 30) pendingEvents.add("before takeoff  " + clean);
+        }
     }
 
     FlightRecorder(Context context) {
@@ -180,6 +207,8 @@ public final class FlightRecorder {
         current = new Flight();
         current.startMillis = System.currentTimeMillis();
         current.track = current.startMillis + ".csv";
+        if (System.currentTimeMillis() - pendingSince < 10 * 60 * 1000L) current.events.addAll(pendingEvents);
+        pendingEvents.clear();
         modes.clear();
         warnings.clear();
         lastSample = 0;

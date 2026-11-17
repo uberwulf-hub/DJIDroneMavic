@@ -93,6 +93,10 @@ public final class Telemetry {
         return instance;
     }
 
+    FlightRecorder recorder() {
+        return recorder;
+    }
+
     public Snapshot last() {
         return last;
     }

@@ -62,6 +62,8 @@ public class FlightDetailActivity extends Activity {
         if (!flight.modes.isEmpty()) sb.append("Flight modes: ").append(TextUtils.join(", ", flight.modes)).append('\n');
         ((TextView) findViewById(R.id.summary)).setText(sb.toString().trim());
 
+        TextView eventsView = findViewById(R.id.events);
+        eventsView.setText(flight.events.isEmpty() ? "" : "Events\n" + TextUtils.join("\n", flight.events));
         TextView warn = findViewById(R.id.warnings);
         if (flight.warnings.isEmpty()) {
             warn.setText(flight.track == null ? "" : "No warnings recorded ✓");
