@@ -77,20 +77,49 @@ final class FlightExport {
         File summary = new File(exportDir(a), "summary.csv");
         try (PrintWriter w = new PrintWriter(new FileWriter(summary))) {
             w.println("start_local,duration_s,max_alt_m,max_dist_m,max_speed_mps,battery_start_pct,battery_end_pct,"
-                    + "min_satellites,home_lat,home_lng,flight_modes,warnings,events");
+                    + "battery_used_pct,battery_name,battery_serial,battery_cycles,battery_health_pct,battery_start_v,"
+                    + "battery_min_v,battery_max_temp_c,min_satellites,home_lat,home_lng,flight_modes,warnings,events");
             SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
             for (FlightRecorder.Flight f : flights) {
-                w.println(String.format(Locale.US, "%s,%d,%.1f,%.1f,%.2f,%d,%d,%d,%s,%s,\"%s\",\"%s\",\"%s\"",
+                String bname = f.batterySerial == null ? "" : String.valueOf(BatteryBook.label(a, f.batterySerial));
+                w.println(String.format(Locale.US, "%s,%d,%.1f,%.1f,%.2f,%d,%d,%s,\"%s\",%s,%s,%s,%s,%s,%s,%d,%s,%s,\"%s\",\"%s\",\"%s\"",
                         fmt.format(new Date(f.startMillis)), f.durationS, f.maxAltitudeM, f.maxDistanceM,
-                        f.maxSpeedMps, f.batteryStart, f.batteryEnd, f.minSatellites,
+                        f.maxSpeedMps, f.batteryStart, f.batteryEnd,
+                        f.batteryStart >= 0 && f.batteryEnd >= 0 ? String.valueOf(f.batteryStart - f.batteryEnd) : "",
+                        bname.equals("null") ? "" : bname.replace('"', '\''),
+                        f.batterySerial == null ? "" : f.batterySerial,
+                        f.batteryCycles >= 0 ? String.valueOf(f.batteryCycles) : "",
+                        f.batteryHealthPct >= 0 ? String.valueOf(f.batteryHealthPct) : "",
+                        Double.isNaN(f.batteryStartVolts) ? "" : String.format(Locale.US, "%.2f", f.batteryStartVolts),
+                        Double.isNaN(f.batteryMinVolts) ? "" : String.format(Locale.US, "%.2f", f.batteryMinVolts),
+                        Double.isNaN(f.batteryMaxTempC) ? "" : String.format(Locale.US, "%.1f", f.batteryMaxTempC),
+                        f.minSatellites,
                         Double.isNaN(f.homeLat) ? "" : String.valueOf(f.homeLat),
                         Double.isNaN(f.homeLng) ? "" : String.valueOf(f.homeLng),
                         android.text.TextUtils.join("; ", f.modes), android.text.TextUtils.join("; ", f.warnings),
                         android.text.TextUtils.join("; ", f.events).replace('"', '\'')));
             }
         }
+        File batteries = new File(exportDir(a), "batteries.csv");
+        try (PrintWriter w = new PrintWriter(new FileWriter(batteries))) {
+            w.println("name,serial,health_pct,full_charge_mah,design_mah,cycles,flights,flight_time_s,hottest_c,"
+                    + "last_flight_hottest_c,last_flight_used_pct,first_seen,last_used");
+            SimpleDateFormat d = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+            for (BatteryBook.Pack p : BatteryBook.list(a)) {
+                w.println(String.format(Locale.US, "\"%s\",%s,%s,%s,%s,%s,%d,%d,%s,%s,%s,%s,%s",
+                        p.name.replace('"', '\''), p.serial,
+                        p.healthPct() >= 0 ? String.valueOf(p.healthPct()) : "",
+                        p.fullMah > 0 ? String.valueOf(p.fullMah) : "", p.designMah > 0 ? String.valueOf(p.designMah) : "",
+                        p.cycles >= 0 ? String.valueOf(p.cycles) : "", p.flights, p.flightSeconds,
+                        Double.isNaN(p.maxTempC) ? "" : String.format(Locale.US, "%.1f", p.maxTempC),
+                        Double.isNaN(p.lastFlightMaxTempC) ? "" : String.format(Locale.US, "%.1f", p.lastFlightMaxTempC),
+                        p.lastFlightUsedPct >= 0 ? String.valueOf(p.lastFlightUsedPct) : "",
+                        d.format(new Date(p.firstSeen)), d.format(new Date(p.lastSeen))));
+            }
+        }
         try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(out))) {
             addToZip(zip, summary, "summary.csv");
+            addToZip(zip, batteries, "batteries.csv");
             for (FlightRecorder.Flight f : flights) {
                 File t = f.trackFile(a);
                 if (t == null || !t.exists()) continue;

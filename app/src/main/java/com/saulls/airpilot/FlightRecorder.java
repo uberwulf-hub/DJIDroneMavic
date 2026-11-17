@@ -55,6 +55,8 @@ public final class FlightRecorder {
         public String track; // file name in files/flights, or null for old flights
         public String batterySerial;
         public double batteryMaxTempC = Double.NaN;
+        public int batteryCycles = -1, batteryHealthPct = -1;
+        public double batteryStartVolts = Double.NaN, batteryMinVolts = Double.NaN;
         public List<String> modes = new ArrayList<>();
         public List<String> warnings = new ArrayList<>();
         /** App events: moves/tracking/missions, errors shown, photos. "m:ss text" (time into the flight). */
@@ -77,6 +79,10 @@ public final class FlightRecorder {
             if (track != null) o.put("track", track);
             if (batterySerial != null) o.put("bserial", batterySerial);
             if (!Double.isNaN(batteryMaxTempC)) o.put("btmax", batteryMaxTempC);
+            o.put("bcyc", batteryCycles);
+            o.put("bhealth", batteryHealthPct);
+            if (!Double.isNaN(batteryStartVolts)) o.put("bv0", batteryStartVolts);
+            if (!Double.isNaN(batteryMinVolts)) o.put("bvmin", batteryMinVolts);
             o.put("modes", new JSONArray(modes));
             o.put("warn", new JSONArray(warnings));
             if (!events.isEmpty()) o.put("events", new JSONArray(events));
@@ -98,6 +104,10 @@ public final class FlightRecorder {
             f.track = o.has("track") ? o.optString("track") : null;
             f.batterySerial = o.has("bserial") ? o.optString("bserial") : null;
             f.batteryMaxTempC = o.optDouble("btmax", Double.NaN);
+            f.batteryCycles = o.optInt("bcyc", -1);
+            f.batteryHealthPct = o.optInt("bhealth", -1);
+            f.batteryStartVolts = o.optDouble("bv0", Double.NaN);
+            f.batteryMinVolts = o.optDouble("bvmin", Double.NaN);
             JSONArray m = o.optJSONArray("modes");
             if (m != null) for (int i = 0; i < m.length(); i++) f.modes.add(m.optString(i));
             JSONArray ev = o.optJSONArray("events");
@@ -171,6 +181,13 @@ public final class FlightRecorder {
             if (s.batterySerial != null) f.batterySerial = s.batterySerial;
             if (!Double.isNaN(s.batteryTempC)) {
                 f.batteryMaxTempC = Double.isNaN(f.batteryMaxTempC) ? s.batteryTempC : Math.max(f.batteryMaxTempC, s.batteryTempC);
+            }
+            if (s.batteryCycles >= 0) f.batteryCycles = s.batteryCycles;
+            if (s.batteryFullMah > 0 && s.batteryDesignMah > 0)
+                f.batteryHealthPct = (int) Math.min(100, Math.round(100.0 * s.batteryFullMah / s.batteryDesignMah));
+            if (!Double.isNaN(s.batteryVolts) && s.batteryVolts > 1) {
+                if (Double.isNaN(f.batteryStartVolts)) f.batteryStartVolts = s.batteryVolts;
+                f.batteryMinVolts = Double.isNaN(f.batteryMinVolts) ? s.batteryVolts : Math.min(f.batteryMinVolts, s.batteryVolts);
             }
             lastCycles = s.batteryCycles;
             lastFull = s.batteryFullMah;

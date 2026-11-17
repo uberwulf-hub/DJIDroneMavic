@@ -23,6 +23,7 @@ import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 /** One flight in detail: numbers, warnings, charts, path on a map, and export. */
 public class FlightDetailActivity extends Activity {
@@ -57,6 +58,18 @@ public class FlightDetailActivity extends Activity {
         if (flight.batteryStart >= 0) {
             sb.append("Battery: ").append(flight.batteryStart).append("% → ").append(flight.batteryEnd)
                     .append("%  (used ").append(flight.batteryStart - flight.batteryEnd).append("%)\n");
+        }
+        if (flight.batterySerial != null) {
+            String bn = BatteryBook.label(this, flight.batterySerial);
+            sb.append("Battery used: ").append(bn != null ? bn : flight.batterySerial);
+            if (flight.batteryHealthPct >= 0) sb.append(" \u00B7 ").append(flight.batteryHealthPct).append("% health");
+            if (flight.batteryCycles >= 0) sb.append(" \u00B7 ").append(flight.batteryCycles).append(" cycles");
+            sb.append('\n');
+        }
+        if (!Double.isNaN(flight.batteryStartVolts) && !Double.isNaN(flight.batteryMinVolts)) {
+            sb.append(String.format(Locale.US, "Battery voltage: %.2f V \u2192 lowest %.2f V", flight.batteryStartVolts, flight.batteryMinVolts));
+            if (!Double.isNaN(flight.batteryMaxTempC)) sb.append(" \u00B7 hottest ").append(Math.round(flight.batteryMaxTempC)).append("°C");
+            sb.append('\n');
         }
         if (flight.minSatellites >= 0) sb.append("Fewest GPS satellites: ").append(flight.minSatellites).append('\n');
         if (!flight.modes.isEmpty()) sb.append("Flight modes: ").append(TextUtils.join(", ", flight.modes)).append('\n');
