@@ -21,6 +21,31 @@ public class TrackOverlay extends View {
         void onBoxDrawn(RectF screenBox);
     }
 
+    public interface OnSubjectListener {
+        void onSubjectPicked(int index);
+    }
+
+    private java.util.List<RectF> subjects;
+    private int[] subjectIndexes;
+    private OnSubjectListener subjectListener;
+    private final Paint subjectPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    public void setOnSubjectListener(OnSubjectListener l) {
+        subjectListener = l;
+    }
+
+    /** Subject-sensing mode: show detected subjects (view coords) to tap, or null to leave it. */
+    public void setSubjects(java.util.List<RectF> rects, int[] indexes) {
+        subjects = rects;
+        subjectIndexes = indexes;
+        if (rects != null) {
+            selecting = false;
+            target = null;
+        }
+        setVisibility(subjects != null || selecting || target != null ? VISIBLE : GONE);
+        invalidate();
+    }
+
     private final Paint box = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint hint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -74,6 +99,22 @@ public class TrackOverlay extends View {
     @SuppressLint("ClickableViewAccessibility")
     @Override
     public boolean onTouchEvent(MotionEvent e) {
+        if (subjects != null) {
+            if (e.getActionMasked() == MotionEvent.ACTION_UP) {
+                for (int i = 0; i < subjects.size(); i++) {
+                    RectF r = new RectF(subjects.get(i));
+                    r.inset(-dp(12), -dp(12));
+                    if (r.contains(e.getX(), e.getY())) {
+                        int idx = subjectIndexes[i];
+                        subjects = null;
+                        invalidate();
+                        if (subjectListener != null) subjectListener.onSubjectPicked(idx);
+                        break;
+                    }
+                }
+            }
+            return true;
+        }
         if (!selecting) return false;
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
@@ -107,6 +148,15 @@ public class TrackOverlay extends View {
 
     @Override
     protected void onDraw(Canvas c) {
+        if (subjects != null) {
+            c.drawText(subjects.isEmpty() ? "Looking for people… stand 10–30 ft in front of the camera"
+                    : "Tap the person to track", getWidth() / 2f, getHeight() * 0.22f, hint);
+            subjectPaint.setStyle(Paint.Style.STROKE);
+            subjectPaint.setStrokeWidth(dp(3));
+            subjectPaint.setColor(Color.parseColor("#4FC3F7"));
+            for (RectF r : subjects) c.drawRect(r, subjectPaint);
+            return;
+        }
         if (selecting) {
             c.drawText("Draw a box around the person to track (or tap them)",
                     getWidth() / 2f, getHeight() * 0.22f, hint);

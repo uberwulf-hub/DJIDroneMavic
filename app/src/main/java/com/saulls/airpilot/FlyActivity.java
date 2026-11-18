@@ -166,6 +166,14 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         trackOverlay = findViewById(R.id.track_overlay);
         trackCancel = findViewById(R.id.track_cancel);
         trackOverlay.setOnBoxListener(this::onSubjectBoxed);
+        trackOverlay.setOnSubjectListener(index -> {
+            ActiveTracker.get().pick(index);
+            FlightRecorder.event(this, "Picked subject #" + index);
+            moveText.setText("Locking on…");
+            moveHint.setText("Move a stick or tap STOP to end");
+            moveBanner.setVisibility(View.VISIBLE);
+            trackCancel.setVisibility(View.GONE);
+        });
         trackCancel.setOnClickListener(v -> cancelSelecting());
         findViewById(R.id.move_stop).setOnClickListener(v -> {
             SmartMove.get(this).stop("Stopped.");
@@ -586,13 +594,13 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         // DJI vision tracking (ActiveTrack) times out on the Mavic Air from third-party apps, so it's
         // only offered on other drones.
         dji.sdk.base.BaseProduct prod = dji.sdk.sdkmanager.DJISDKManager.getInstance().getProduct();
-        boolean trackingOk = prod == null || prod.getModel() != dji.common.product.Model.MAVIC_AIR;
+        boolean trackingOk = true; // retrying with DJI's subject-sensing method
         String[] items = new String[trackingOk ? kinds.length + 4 : 4];
         items[0] = "\uD83D\uDEB4  Follow me  (uses your phone's GPS)";
         items[1] = "\u21BB  Orbit me  (circles your phone's GPS)";
         items[2] = "\u21BB  Orbit a spot  (the spot the camera faces)";
         items[3] = "\u2196  Dronie  (fly back and up)";
-        if (trackingOk) for (int i = 0; i < kinds.length; i++) items[i + 4] = "\u25CE  " + kinds[i].title + "  (DJI vision tracking, experimental)";
+        if (trackingOk) for (int i = 0; i < kinds.length; i++) items[i + 4] = "\u25CE  " + kinds[i].title + "  (DJI tracking, experimental)";
         new android.app.AlertDialog.Builder(this)
                 .setTitle("Smart moves")
                 .setItems(items, (d, which) -> {
@@ -718,9 +726,24 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
                 .setView(box)
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Choose person", (d, w) -> {
+                    closeAllPanels();
+                    if (ActiveTracker.get().autoSensingSupported()) {
+                        // Newer DJI method: the drone detects people, you tap one.
+                        String problem = ActiveTracker.get().beginSensing(this, kind, record.isChecked());
+                        FlightRecorder.event(this, kind.title + ": subject sensing " + (problem == null ? "started" : "couldn't start: " + problem));
+                        if (problem != null) {
+                            new android.app.AlertDialog.Builder(this).setTitle("Can't start").setMessage(problem)
+                                    .setPositiveButton("OK", null).show();
+                            return;
+                        }
+                        lastTrackStatus = null;
+                        trackOverlay.setSubjects(new java.util.ArrayList<>(), new int[0]);
+                        trackCancel.setVisibility(View.VISIBLE);
+                        return;
+                    }
+                    FlightRecorder.event(this, kind.title + ": this drone doesn't support subject sensing; using draw-a-box");
                     pendingKind = kind;
                     pendingRecord = record.isChecked();
-                    closeAllPanels();
                     trackOverlay.setSelecting(true);
                     trackCancel.setVisibility(View.VISIBLE);
                 })
@@ -728,6 +751,10 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     }
 
     private void cancelSelecting() {
+        if (ActiveTracker.get().isSensing()) {
+            ActiveTracker.get().cancelSensing();
+            trackOverlay.setSubjects(null, null);
+        }
         pendingKind = null;
         trackOverlay.setSelecting(false);
         trackCancel.setVisibility(View.GONE);
@@ -817,7 +844,20 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     }
 
     @Override
+    public void onSubjects(ActiveTracker.Kind kind, java.util.List<android.graphics.RectF> rects, int[] indexes) {
+        java.util.List<android.graphics.RectF> view = new java.util.ArrayList<>();
+        for (android.graphics.RectF r : rects) view.add(fromVideo(r));
+        trackOverlay.setSubjects(view, indexes);
+        if (!rects.isEmpty() && lastTrackStatus == null) {
+            lastTrackStatus = "subjects";
+            FlightRecorder.event(this, kind.title + ": drone detected " + rects.size() + " subject(s)");
+        }
+    }
+
+    @Override
     public void onTrackEnded(ActiveTracker.Kind kind, String reason) {
+        trackOverlay.setSubjects(null, null);
+        trackCancel.setVisibility(View.GONE);
         moveBanner.setVisibility(View.GONE);
         FlightRecorder.event(this, (kind == null ? "Tracking" : kind.title) + " ended: " + reason);
         trackOverlay.setTarget(null, 0);
@@ -981,7 +1021,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
 
     @Override
     public void onBackPressed() {
-        if (trackOverlay != null && trackOverlay.isSelecting()) {
+        if (trackOverlay != null && (trackOverlay.isSelecting() || ActiveTracker.get().isSensing())) {
             cancelSelecting();
             return;
         }

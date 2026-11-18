@@ -54,6 +54,9 @@ public final class ActiveTracker implements ActiveTrackMissionOperatorListener {
         void onTrackUpdate(Kind kind, String status, android.graphics.RectF target, int confidence);
 
         void onTrackEnded(Kind kind, String reason);
+
+        /** Subject sensing: people/vehicles the drone detected (normalized rects) and their indexes. */
+        void onSubjects(Kind kind, java.util.List<android.graphics.RectF> rects, int[] indexes);
     }
 
     private static ActiveTracker instance;
@@ -72,6 +75,84 @@ public final class ActiveTracker implements ActiveTrackMissionOperatorListener {
     private boolean everTracked;
     private boolean recordVideo;
     private boolean weRecording;
+
+    private volatile boolean sensing;
+    private android.content.Context ctx;
+
+    public boolean isSensing() {
+        return sensing;
+    }
+
+    /** Whether this drone starts tracking by detecting subjects itself (tap to pick). */
+    public boolean autoSensingSupported() {
+        MissionControl mc = MissionControl.getInstance();
+        ActiveTrackOperator o = mc == null ? null : mc.getActiveTrackOperator();
+        try {
+            return o != null && o.isAutoSensingSupported();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Step 1 of the subject-sensing method: ask the drone to detect people. Null if started. */
+    public String beginSensing(android.content.Context c, Kind k, boolean record) {
+        if (running || sensing) return "Tracking is already running.";
+        BaseProduct product = DJISDKManager.getInstance().getProduct();
+        if (product == null || !product.isConnected()) return "Drone not connected.";
+        Telemetry.Snapshot s = Telemetry.get(c).last();
+        if (!s.flying) return "Take off first, then point the camera at the person.";
+        if (!Double.isNaN(s.altitudeM) && s.altitudeM < 2) return "Fly a little higher first (2 m / 7 ft or more).";
+        if (s.flightMode != null && s.flightMode.toLowerCase(java.util.Locale.US).contains("sport"))
+            return "Switch Sport mode off on the controller first (back to Normal).";
+        op = MissionControl.getInstance().getActiveTrackOperator();
+        if (op == null) return "ActiveTrack isn't available.";
+        ctx = c.getApplicationContext();
+        kind = k;
+        recordVideo = record && !k.isQuickShot();
+        sensing = true;
+        everTracked = false;
+        confirmed = false;
+        op.removeListener(this);
+        op.addListener(this);
+        dji.common.util.CommonCallbacks.CompletionCallback<DJIError> cb = err -> {
+            if (err != null) endSensing("Couldn't turn on subject detection: " + err.getDescription());
+        };
+        if (k.isQuickShot()) op.enableAutoSensingForQuickShot(cb);
+        else op.enableAutoSensing(cb);
+        return null;
+    }
+
+    /** Step 2: the pilot tapped a detected subject. */
+    public void pick(int index) {
+        if (!sensing || op == null) return;
+        sensing = false;
+        running = true;
+        ActiveTrackMission mission = new ActiveTrackMission();
+        mission.setMode(modeFor(kind));
+        if (kind.isQuickShot()) mission.setQuickShotMode(quickShotFor(kind));
+        mission.setTargetIndex(index);
+        update("Locking on…", null, 0);
+        op.startAutoSensingMission(mission, err -> {
+            if (err != null) end("Couldn't start: " + err.getDescription());
+        });
+    }
+
+    public void cancelSensing() {
+        if (!sensing) return;
+        endSensing("Cancelled.");
+    }
+
+    private void endSensing(String reason) {
+        sensing = false;
+        if (op != null) {
+            op.disableAutoSensing(null);
+            op.removeListener(this);
+        }
+        Kind k = kind;
+        main.post(() -> {
+            if (listener != null) listener.onTrackEnded(k, reason);
+        });
+    }
 
     public void setListener(Listener l) {
         listener = l;
@@ -142,6 +223,10 @@ public final class ActiveTracker implements ActiveTrackMissionOperatorListener {
     }
 
     public void stop() {
+        if (sensing) {
+            cancelSensing();
+            return;
+        }
         if (!running) return;
         if (op != null) {
             op.stopTracking(null);
@@ -152,9 +237,25 @@ public final class ActiveTracker implements ActiveTrackMissionOperatorListener {
 
     @Override
     public void onUpdate(ActiveTrackMissionEvent e) {
-        if (!running || e == null) return;
+        if (e == null) return;
+        ActiveTrackTrackingState ts0 = e.getTrackingState();
+        if (sensing) {
+            dji.common.mission.activetrack.SubjectSensingState[] subs = ts0 == null ? null : ts0.getAutoSensedSubjects();
+            java.util.List<android.graphics.RectF> rects = new java.util.ArrayList<>();
+            int[] idx = new int[subs == null ? 0 : subs.length];
+            if (subs != null) for (int i = 0; i < subs.length; i++) {
+                rects.add(subs[i].getTargetRect() == null ? new android.graphics.RectF() : new android.graphics.RectF(subs[i].getTargetRect()));
+                idx[i] = subs[i].getIndex();
+            }
+            Kind k = kind;
+            main.post(() -> {
+                if (listener != null && sensing) listener.onSubjects(k, rects, idx);
+            });
+            return;
+        }
+        if (!running) return;
         ActiveTrackState cur = e.getCurrentState();
-        ActiveTrackTrackingState ts = e.getTrackingState();
+        ActiveTrackTrackingState ts = ts0;
         android.graphics.RectF rect = ts != null ? ts.getTargetRect() : null;
         int conf = 0;
         if (ts != null && ts.getState() != null) {
@@ -212,7 +313,13 @@ public final class ActiveTracker implements ActiveTrackMissionOperatorListener {
     private void end(String reason) {
         if (!running) return;
         running = false;
-        if (op != null) op.removeListener(this);
+        if (op != null) {
+            op.removeListener(this);
+            try {
+                if (op.isAutoSensingEnabled()) op.disableAutoSensing(null);
+            } catch (Exception ignored) {
+            }
+        }
         if (weRecording) {
             BaseProduct p = DJISDKManager.getInstance().getProduct();
             Camera cam = p != null ? p.getCamera() : null;
