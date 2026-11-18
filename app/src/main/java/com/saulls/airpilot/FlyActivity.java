@@ -187,9 +187,30 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         @Override
         public void run() {
             Telemetry.get(FlyActivity.this).attach();
+            releaseStaleAppControl();
             parentView.postDelayed(this, 3000);
         }
     };
+
+    private long lastRelease;
+
+    /**
+     * Safety: if the link dropped during an automatic move, the drone can come back still in
+     * app-control ("Joystick") mode with nothing driving it. Hand control back to the sticks.
+     */
+    private void releaseStaleAppControl() {
+        Telemetry.Snapshot s = Telemetry.get(this).last();
+        if (!s.connected || System.currentTimeMillis() - s.time > 2000) return;
+        if (s.flightMode == null || !s.flightMode.toLowerCase(java.util.Locale.US).contains("joystick")) return;
+        if (SmartMove.get(this).isRunning() || MissionRunner.get(this).isRunning() || ActiveTracker.get().isRunning()) return;
+        if (System.currentTimeMillis() - lastRelease < 5000) return;
+        lastRelease = System.currentTimeMillis();
+        dji.sdk.flightcontroller.FlightController fc = Telemetry.flightController();
+        if (fc == null) return;
+        fc.setVirtualStickModeEnabled(false, err -> {
+            if (err == null) runOnUiThread(() -> toast("Control handed back to your sticks."));
+        });
+    }
 
     // ------------------------------------------------------------ missions
 
