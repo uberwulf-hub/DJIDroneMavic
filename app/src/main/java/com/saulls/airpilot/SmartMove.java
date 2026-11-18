@@ -155,6 +155,10 @@ public final class SmartMove {
         startYaw = s.yaw;
         startAlt = s.altitudeM;
         usingPhone = phoneMove;
+        cmdYaw = Double.NaN;
+        cmdForward = 0;
+        cmdRight = 0;
+        gimbalTarget = Double.NaN;
         smoothE = smoothN = Double.NaN;
         lastGimbalPitch = 999;
         if (phoneMove) {
@@ -254,8 +258,8 @@ public final class SmartMove {
                 smoothE = pe;
                 smoothN = pn;
             } else {
-                smoothE += 0.35 * (pe - smoothE);
-                smoothN += 0.35 * (pn - smoothN);
+                smoothE += 0.12 * (pe - smoothE);
+                smoothN += 0.12 * (pn - smoothN);
             }
             if (params.type == Type.FOLLOW_ME) followTick(s, e, n, me);
             else {
@@ -345,20 +349,25 @@ public final class SmartMove {
         progress(-1f, "Follow me · " + Units.distance(dist, Prefs.isImperial(context)) + " away");
     }
 
-    /** Tilt the camera so the pilot stays in frame. */
+    private double gimbalTarget = Double.NaN;
+
+    /** Tilt the camera so the pilot stays in frame: small, frequent, smoothed moves. */
     private void aimGimbalAtPilot(Telemetry.Snapshot s, double horizontal) {
+        if (Double.isNaN(s.altitudeM)) return;
+        double want = -Math.toDegrees(Math.atan2(Math.max(0, s.altitudeM - 1.2), Math.max(1, horizontal)));
+        want = clamp(want, -85, 0);
+        gimbalTarget = Double.isNaN(gimbalTarget) ? want : gimbalTarget + 0.15 * (want - gimbalTarget);
         long now = System.currentTimeMillis();
-        if (now - lastGimbalMs < 500 || Double.isNaN(s.altitudeM)) return;
-        float pitch = (float) -Math.toDegrees(Math.atan2(Math.max(0, s.altitudeM - 1.2), Math.max(1, horizontal)));
-        pitch = (float) clamp(pitch, -85, 0);
-        if (Math.abs(pitch - lastGimbalPitch) < 2) return;
+        if (now - lastGimbalMs < 250) return;
+        float pitch = (float) gimbalTarget;
+        if (Math.abs(pitch - lastGimbalPitch) < 0.5) return;
         lastGimbalMs = now;
         lastGimbalPitch = pitch;
         BaseProduct p = DJISDKManager.getInstance().getProduct();
         dji.sdk.gimbal.Gimbal g = p != null ? p.getGimbal() : null;
         if (g != null) {
             g.rotate(new dji.common.gimbal.Rotation.Builder()
-                    .mode(dji.common.gimbal.RotationMode.ABSOLUTE_ANGLE).pitch(pitch).time(0.5).build(), null);
+                    .mode(dji.common.gimbal.RotationMode.ABSOLUTE_ANGLE).pitch(pitch).time(0.35).build(), null);
         }
     }
 
@@ -366,9 +375,25 @@ public final class SmartMove {
      * DJI quirk: in VELOCITY mode the "pitch" field is sideways (right +) and the "roll"
      * field is forward (+).
      */
+    private double cmdYaw = Double.NaN, cmdForward = 0, cmdRight = 0;
+    private static final double MAX_YAW_STEP = 3.0;   // deg per tick (30°/s): smooth turns
+    private static final double MAX_SPEED_STEP = 0.25; // m/s per tick (2.5 m/s²): no jerks
+
     private void send(double forward, double right, double yawDeg, double up) {
         FlightController f = fc;
         if (f == null || !running) return;
+        if (usingPhone) {
+            if (Double.isNaN(cmdYaw)) {
+                Telemetry.Snapshot s = Telemetry.get(context).last();
+                cmdYaw = Double.isNaN(s.yaw) ? yawDeg : s.yaw;
+            }
+            cmdYaw = wrap(cmdYaw + clamp(wrap(yawDeg - cmdYaw), -MAX_YAW_STEP, MAX_YAW_STEP));
+            yawDeg = cmdYaw;
+            cmdForward += clamp(forward - cmdForward, -MAX_SPEED_STEP, MAX_SPEED_STEP);
+            cmdRight += clamp(right - cmdRight, -MAX_SPEED_STEP, MAX_SPEED_STEP);
+            forward = cmdForward;
+            right = cmdRight;
+        }
         f.sendVirtualStickFlightControlData(
                 new FlightControlData((float) right, (float) forward, (float) wrap(yawDeg), (float) up), null);
     }

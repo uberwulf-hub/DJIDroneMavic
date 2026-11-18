@@ -279,6 +279,33 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
                 .setMessage(reason).setPositiveButton("OK", null).show();
     }
 
+    private long lastLowLightCheck;
+
+    /** In Auto mode, brighten the camera as the sun gets low (and undo it when it's up again). */
+    private void checkLowLight(Telemetry.Snapshot s) {
+        long now = System.currentTimeMillis();
+        if (now - lastLowLightCheck < 60_000 || !s.connected) return;
+        lastLowLightCheck = now;
+        double lat = s.lat, lng = s.lng;
+        if (Double.isNaN(lat)) {
+            android.location.Location me = PhoneLocation.get(this).last();
+            if (me != null) {
+                lat = me.getLatitude();
+                lng = me.getLongitude();
+            }
+        }
+        Boolean want = LowLight.autoDecision(this, lat, lng);
+        if (want == null) return;
+        LowLight.apply(this, want, () -> runOnUiThread(() -> {
+            VoiceAlerts va = VoiceAlerts.get(this);
+            va.say("lowlight", want
+                    ? va.line("Low light mode on.", "Sun's going down. I've brightened up the camera for you.",
+                    "Getting dark, so I'm letting more light into the camera.")
+                    : va.line("Low light mode off.", "Plenty of light again. Camera's back to normal."), 60_000);
+            toast(want ? "Sun's low: low-light camera mode on (+0.7 EV, 30 fps)." : "Daylight: camera back to normal.");
+        }));
+    }
+
     // ------------------------------------------------------------ home arrow
 
     private void updateHomePanel(Telemetry.Snapshot s) {
@@ -409,7 +436,9 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     }
 
     private void showCameraModes() {
+        boolean ll = LowLight.active(this);
         String[] items = {
+                (ll ? "\u2600  Low light: ON (tap for normal)" : "\u263E  Low light: brighter for sunset / dusk"),
                 "\u25C9  Single photo",
                 "\u23F1  Photo in 3 seconds",
                 "\u23F1  Photo in 10 seconds",
@@ -422,7 +451,16 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         };
         new android.app.AlertDialog.Builder(this)
                 .setTitle("Camera")
-                .setItems(items, (d, which) -> {
+                .setItems(items, (d, which0) -> {
+                    if (which0 == 0) {
+                        boolean on = !LowLight.active(this);
+                        if (LowLight.AUTO.equals(LowLight.mode(this))) LowLight.setMode(this, on ? LowLight.ON : LowLight.OFF);
+                        LowLight.apply(this, on, () -> runOnUiThread(() -> toast(on
+                                ? "Low light on: brighter exposure, video at 30 fps or less."
+                                : "Low light off: normal exposure.")));
+                        return;
+                    }
+                    int which = which0 - 1;
                     switch (which) {
                         case 0: shoot(dji.common.camera.SettingsDefinitions.ShootPhotoMode.SINGLE, null, null, "Photo taken"); break;
                         case 1: timerShot(3); break;
@@ -524,12 +562,16 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     private void showMovesDialog() {
         if (SmartMove.get(this).isRunning() || ActiveTracker.get().isRunning()) return;
         final ActiveTracker.Kind[] kinds = ActiveTracker.Kind.values();
-        String[] items = new String[kinds.length + 4];
+        // DJI vision tracking (ActiveTrack) times out on the Mavic Air from third-party apps, so it's
+        // only offered on other drones.
+        dji.sdk.base.BaseProduct prod = dji.sdk.sdkmanager.DJISDKManager.getInstance().getProduct();
+        boolean trackingOk = prod == null || prod.getModel() != dji.common.product.Model.MAVIC_AIR;
+        String[] items = new String[trackingOk ? kinds.length + 4 : 4];
         items[0] = "\uD83D\uDEB4  Follow me  (uses your phone's GPS)";
         items[1] = "\u21BB  Orbit me  (circles your phone's GPS)";
         items[2] = "\u21BB  Orbit a spot  (the spot the camera faces)";
         items[3] = "\u2196  Dronie  (fly back and up)";
-        for (int i = 0; i < kinds.length; i++) items[i + 4] = "\u25CE  " + kinds[i].title + "  (DJI vision tracking, experimental)";
+        if (trackingOk) for (int i = 0; i < kinds.length; i++) items[i + 4] = "\u25CE  " + kinds[i].title + "  (DJI vision tracking, experimental)";
         new android.app.AlertDialog.Builder(this)
                 .setTitle("Smart moves")
                 .setItems(items, (d, which) -> {
@@ -962,6 +1004,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         if (s.flying && !wasFlying) flightStartedAt = System.currentTimeMillis();
         updateHomePanel(s);
         updateReadyCard(s);
+        checkLowLight(s);
         if (!s.flying && wasFlying) onLanded();
         wasFlying = s.flying;
         mapWidget.update(s);

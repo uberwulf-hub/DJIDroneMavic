@@ -76,6 +76,14 @@ public class SettingsActivity extends Activity {
             va.say("styletest", va.line("Standard voice style.",
                     "Casual mode on. I'll keep it chill.", "Casual mode. Let's have some fun up there."), 0);
         });
+        android.widget.RadioGroup ll = findViewById(R.id.low_light);
+        String llm = LowLight.mode(this);
+        ll.check(LowLight.ON.equals(llm) ? R.id.ll_on : LowLight.OFF.equals(llm) ? R.id.ll_off : R.id.ll_auto);
+        ll.setOnCheckedChangeListener((g, id) -> {
+            String m = id == R.id.ll_on ? LowLight.ON : id == R.id.ll_off ? LowLight.OFF : LowLight.AUTO;
+            LowLight.setMode(this, m);
+            if (!LowLight.AUTO.equals(m)) LowLight.apply(this, LowLight.ON.equals(m), null);
+        });
         Switch swByDate = findViewById(R.id.sw_by_date);
         swByDate.setChecked(Prefs.byDate(this));
         swByDate.setOnCheckedChangeListener((b, on) -> Prefs.setByDate(this, on));
