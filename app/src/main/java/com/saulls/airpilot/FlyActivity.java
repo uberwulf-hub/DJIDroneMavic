@@ -83,6 +83,14 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     private View homePanel, readyCard;
     private TextView homeArrow, homeText, readyTitle, readyRows, countdown;
     private boolean readyDismissed;
+    private boolean clean;
+    /** Hidden in clean view. */
+    private static final int[] EXTRAS = {
+            R.id.btn_home, R.id.mode_toggle, R.id.btn_moves, R.id.quick_row, R.id.btn_mission_start,
+            R.id.ready_card, R.id.home_panel, R.id.simple_hud, R.id.map_widget, R.id.camera, R.id.camera2,
+            R.id.manual_focus, R.id.camera_lens_control, R.id.expose_switch, R.id.dashboard_widget,
+            R.id.remaining_flight_time
+    };
     private Weather.Now weather;
     private long flightStartedAt;
     private android.app.AlertDialog landingDialog;
@@ -142,6 +150,11 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         hudTime = findViewById(R.id.hud_time);
         modeToggle = findViewById(R.id.mode_toggle);
         findViewById(R.id.btn_home).setOnClickListener(v -> finish());
+        findViewById(R.id.btn_clean).setOnClickListener(v -> {
+            clean = !clean;
+            Prefs.raw(this).edit().putBoolean("clean_view", clean).apply();
+            applyMode();
+        });
         applyEdgeInsets();
         homePanel = findViewById(R.id.home_panel);
         homeArrow = findViewById(R.id.home_arrow);
@@ -338,7 +351,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     // ------------------------------------------------------------ home arrow
 
     private void updateHomePanel(Telemetry.Snapshot s) {
-        boolean show = !advanced && s.flying && !Double.isNaN(s.distanceM) && s.distanceM > 5;
+        boolean show = !clean && !advanced && s.flying && !Double.isNaN(s.distanceM) && s.distanceM > 5;
         homePanel.setVisibility(show ? View.VISIBLE : View.GONE);
         if (!show) return;
         if (!Double.isNaN(s.homeRelBearing)) homeArrow.setRotation((float) s.homeRelBearing);
@@ -358,7 +371,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     // ------------------------------------------------------------ ready to fly
 
     private void updateReadyCard(Telemetry.Snapshot s) {
-        boolean show = !readyDismissed && !s.flying && s.connected
+        boolean show = !clean && !readyDismissed && !s.flying && s.connected
                 && System.currentTimeMillis() - s.time < 3000 && !ActiveTracker.get().isRunning();
         readyCard.setVisibility(show ? View.VISIBLE : View.GONE);
         if (!show) return;
@@ -468,6 +481,8 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         boolean ll = LowLight.active(this);
         String[] items = {
                 (ll ? "\u2600  Low light: ON (tap for normal)" : "\u263E  Low light: brighter for sunset / dusk"),
+                "\u2913  Point camera straight down",
+                "\u2194  Level the camera",
                 "\u25C9  Single photo",
                 "\u23F1  Photo in 3 seconds",
                 "\u23F1  Photo in 10 seconds",
@@ -489,7 +504,15 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
                                 : "Low light off: normal exposure.")));
                         return;
                     }
-                    int which = which0 - 1;
+                    if (which0 == 1) {
+                        pointGimbal(-90);
+                        return;
+                    }
+                    if (which0 == 2) {
+                        pointGimbal(0);
+                        return;
+                    }
+                    int which = which0 - 3;
                     switch (which) {
                         case 0: shoot(dji.common.camera.SettingsDefinitions.ShootPhotoMode.SINGLE, null, null, "Photo taken"); break;
                         case 1: timerShot(3); break;
@@ -1032,6 +1055,33 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         super.onBackPressed();
     }
 
+    /** Clean view hides everything but the essentials; tapping ◐ again restores the normal layout. */
+    private void applyClean() {
+        TextView b = findViewById(R.id.btn_clean);
+        b.setText(clean ? "\u25D1" : "\u25D0");
+        b.setAlpha(clean ? 0.55f : 1f);
+        if (clean) {
+            closeAllPanels();
+            for (int id : EXTRAS) {
+                View v = findViewById(id);
+                if (v != null) v.setVisibility(View.GONE);
+            }
+        } else {
+            for (int id : new int[]{R.id.btn_home, R.id.mode_toggle, R.id.btn_moves, R.id.quick_row,
+                    R.id.map_widget, R.id.remaining_flight_time}) {
+                View v = findViewById(id);
+                if (v != null) v.setVisibility(View.VISIBLE);
+            }
+            if (pendingMission != null && !MissionRunner.get(this).isRunning()) missionStart.setVisibility(View.VISIBLE);
+            // Mode-dependent views (HUD, pro camera bars) are restored by applyMode's own rules.
+            for (int id : ADVANCED_ONLY) {
+                View v = findViewById(id);
+                if (v != null) v.setVisibility(advanced ? View.VISIBLE : View.INVISIBLE);
+            }
+            simpleHud.setVisibility(advanced ? View.GONE : View.VISIBLE);
+        }
+    }
+
     /** DJI draws its camera menus for tablets; scale them up so the text is readable on a phone. */
     private void enlargeCameraMenus() {
         final float scale = 1.25f;
@@ -1053,11 +1103,12 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
             if (v != null) v.setVisibility(advanced ? View.VISIBLE : View.INVISIBLE);
         }
         simpleHud.setVisibility(advanced ? View.GONE : View.VISIBLE);
-        modeToggle.setText(advanced ? "PRO  \u25B8 Simple" : "SIMPLE  \u25B8 Pro");
+        modeToggle.setText(advanced ? "Pro" : "Simple");
         if (!advanced) {
             controlsWidget.setAdvancedPanelVisibility(false);
             controlsWidget.setExposurePanelVisibility(false);
         }
+        applyClean();
     }
 
     @Override
@@ -1210,6 +1261,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         mapWidget.onResume();
 
         imperial = Prefs.isImperial(this);
+        clean = Prefs.raw(this).getBoolean("clean_view", false);
         applyMode();
         fpvOverlayWidget.setGridOverlayEnabled(Prefs.isGrid(this));
         if (Prefs.isGrid(this)) {
