@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background_blue"
+    android:background="@color/bg"
     android:orientation="vertical">
 
     <LinearLayout
@@ -15,12 +15,9 @@
 
         <Button
             android:id="@+id/btn_back"
-            android:layout_width="wrap_content"
-            android:layout_height="44dp"
-            android:background="@android:color/transparent"
+            style="@style/GhostButton"
             android:text="‹ Back"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/text_primary"
             android:textSize="16sp" />
 
         <TextView
@@ -28,7 +25,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Safety &amp; Settings"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/text_primary"
             android:textSize="20sp"
             android:textStyle="bold" />
 
@@ -36,7 +33,7 @@
             android:id="@+id/drone_state"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#B3FFFFFF"
+            android:textColor="@color/text_secondary"
             android:textSize="13sp" />
     </LinearLayout>
 
@@ -55,173 +52,213 @@
 
             <!-- ===== App ===== -->
             <TextView style="@style/SectionTitle" android:text="APP" />
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView style="@style/SettingLabel" android:text="Pro mode (all camera controls)" />
-                <Switch android:id="@+id/sw_advanced" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView style="@style/SettingLabel" android:text="Imperial units (ft, mph)" />
-                <Switch android:id="@+id/sw_imperial" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView style="@style/SettingLabel" android:text="Grid lines on video" />
-                <Switch android:id="@+id/sw_grid" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView style="@style/SettingLabel" android:text="Voice callouts (battery, return home, warnings)" />
-                <Switch android:id="@+id/sw_voice" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView style="@style/SettingLabel" android:text="Casual voice style (relaxed, a bit of humour)" />
-                <Switch android:id="@+id/sw_voice_casual" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView android:id="@+id/voice_label" style="@style/SettingLabel" android:text="Voice" />
-                <Button
-                    android:id="@+id/btn_voice"
-                    style="@style/SecondaryButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="40dp"
-                    android:paddingLeft="14dp"
-                    android:paddingRight="14dp"
-                    android:text="Choose voice"
-                    android:textSize="14sp" />
-            </LinearLayout>
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView style="@style/SettingLabel" android:text="Download new photos &amp; videos after landing" />
-                <Switch android:id="@+id/sw_auto_download" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <TextView style="@style/SettingHint" android:layout_marginTop="8dp" android:text="Low-light camera (brighter exposure, video at 30 fps or less):" />
-            <RadioGroup
-                android:id="@+id/low_light"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
-                <RadioButton android:id="@+id/ll_auto" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Auto at sunset" android:textColor="#FFFFFF" android:textSize="15sp" />
-                <RadioButton android:id="@+id/ll_on" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Always on" android:textColor="#FFFFFF" android:textSize="15sp" />
-                <RadioButton android:id="@+id/ll_off" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Off" android:textColor="#FFFFFF" android:textSize="15sp" />
-            </RadioGroup>
+                android:background="@drawable/card_bg"
+                android:orientation="vertical"
+                android:paddingLeft="16dp"
+                android:paddingTop="8dp"
+                android:paddingRight="16dp"
+                android:paddingBottom="10dp">
 
-            <LinearLayout style="@style/SettingRow">
-                <TextView style="@style/SettingLabel" android:text="Sort downloads into a folder for each day" />
-                <Switch android:id="@+id/sw_by_date" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-            </LinearLayout>
+                <LinearLayout style="@style/SettingRow">
+                    <TextView style="@style/SettingLabel" android:text="Pro mode (all camera controls)" />
+                    <Switch android:id="@+id/sw_advanced" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
 
-            <!-- ===== Google Drive ===== -->
-            <TextView style="@style/SectionTitle" android:text="GOOGLE DRIVE SYNC" />
-            <TextView
-                style="@style/SettingHint"
-                android:text="Uploads every photo and video Air Pilot downloads (and your flight logs) to a Drive folder in the background." />
+                <LinearLayout style="@style/SettingRow">
+                    <TextView style="@style/SettingLabel" android:text="Imperial units (ft, mph)" />
+                    <Switch android:id="@+id/sw_imperial" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
 
-            <LinearLayout style="@style/SettingRow">
-                <TextView android:id="@+id/drive_account" style="@style/SettingLabel" android:text="Not signed in" />
-                <Button
-                    android:id="@+id/btn_drive_signin"
-                    style="@style/SecondaryButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="40dp"
-                    android:paddingLeft="14dp"
-                    android:paddingRight="14dp"
-                    android:text="Sign in with Google"
-                    android:textSize="14sp" />
-            </LinearLayout>
+                <LinearLayout style="@style/SettingRow">
+                    <TextView style="@style/SettingLabel" android:text="Grid lines on video" />
+                    <Switch android:id="@+id/sw_grid" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
 
-            <LinearLayout style="@style/SettingRow">
-                <TextView style="@style/SettingLabel" android:text="Sync to Google Drive" />
-                <Switch android:id="@+id/sw_drive" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-            </LinearLayout>
+                <LinearLayout style="@style/SettingRow">
+                    <TextView style="@style/SettingLabel" android:text="Voice callouts (battery, return home, warnings)" />
+                    <Switch android:id="@+id/sw_voice" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
 
-            <LinearLayout style="@style/SettingRow">
-                <TextView style="@style/SettingLabel" android:text="Drive folder" />
-                <EditText
-                    android:id="@+id/et_drive_folder"
-                    android:layout_width="200dp"
+                <LinearLayout style="@style/SettingRow">
+                    <TextView style="@style/SettingLabel" android:text="Casual voice style (relaxed, a bit of humour)" />
+                    <Switch android:id="@+id/sw_voice_casual" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/SettingRow">
+                    <TextView android:id="@+id/voice_label" style="@style/SettingLabel" android:text="Voice" />
+                    <Button
+                        android:id="@+id/btn_voice"
+                        style="@style/SecondaryButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="44dp"
+                        android:paddingLeft="14dp"
+                        android:paddingRight="14dp"
+                        android:text="Choose voice"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/SettingRow">
+                    <TextView style="@style/SettingLabel" android:text="Download new photos &amp; videos after landing" />
+                    <Switch android:id="@+id/sw_auto_download" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <TextView style="@style/SettingHint" android:layout_marginTop="8dp" android:text="Low-light camera (brighter exposure, video at 30 fps or less):" />
+                <RadioGroup
+                    android:id="@+id/low_light"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="end"
-                    android:imeOptions="actionDone"
-                    android:inputType="text"
-                    android:singleLine="true"
-                    android:textColor="#FFFFFF"
-                    android:textSize="16sp" />
+                    android:orientation="horizontal">
+                    <RadioButton android:id="@+id/ll_auto" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Auto at sunset" android:textColor="@color/text_primary" android:textSize="15sp" />
+                    <RadioButton android:id="@+id/ll_on" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Always on" android:textColor="@color/text_primary" android:textSize="15sp" />
+                    <RadioButton android:id="@+id/ll_off" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Off" android:textColor="@color/text_primary" android:textSize="15sp" />
+                </RadioGroup>
+
+                <LinearLayout style="@style/SettingRow">
+                    <TextView style="@style/SettingLabel" android:text="Sort downloads into a folder for each day" />
+                    <Switch android:id="@+id/sw_by_date" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <!-- ===== Google Drive ===== -->
             </LinearLayout>
-            <TextView style="@style/SettingHint" android:text="Use / for subfolders, e.g. Drone/Air Pilot. Air Pilot creates the folder." />
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView style="@style/SettingLabel" android:text="Only upload on Wi-Fi" />
-                <Switch android:id="@+id/sw_drive_wifi" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView style="@style/SettingLabel" android:text="Also upload flight logs (CSV)" />
-                <Switch android:id="@+id/sw_drive_logs" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/drive_status"
-                style="@style/SettingHint"
-                android:layout_marginTop="4dp" />
-
-            <!-- ===== Drone ===== -->
-            <TextView style="@style/SectionTitle" android:text="DRONE SAFETY  (saved to the drone)" />
-            <TextView
-                android:id="@+id/drone_hint"
-                style="@style/SettingHint"
-                android:text="Connect the drone to read and change these." />
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView style="@style/SettingLabel" android:text="Beginner mode" />
-                <Switch android:id="@+id/sw_beginner" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-            </LinearLayout>
-            <TextView style="@style/SettingHint" android:text="Keeps the drone close and low (about 30 m / 100 ft) and slow. Needs GPS." />
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView android:id="@+id/lbl_max_alt" style="@style/SettingLabel" android:text="Max altitude" />
-                <EditText android:id="@+id/et_max_alt" style="@style/SettingNumber" />
-            </LinearLayout>
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView style="@style/SettingLabel" android:text="Limit distance from home" />
-                <Switch android:id="@+id/sw_dist_limit" android:layout_width="wrap_content" android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView android:id="@+id/lbl_max_dist" style="@style/SettingLabel" android:text="Max distance" />
-                <EditText android:id="@+id/et_max_dist" style="@style/SettingNumber" />
-            </LinearLayout>
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView android:id="@+id/lbl_rth_alt" style="@style/SettingLabel" android:text="Return-to-home altitude" />
-                <EditText android:id="@+id/et_rth_alt" style="@style/SettingNumber" />
-            </LinearLayout>
-            <TextView style="@style/SettingHint" android:text="Set it higher than nearby trees and buildings." />
-
-            <LinearLayout style="@style/SettingRow">
-                <TextView style="@style/SettingLabel" android:text="Low battery warning (%)" />
-                <EditText android:id="@+id/et_low_batt" style="@style/SettingNumber" />
-            </LinearLayout>
-
-            <TextView style="@style/SectionTitle" android:text="VIDEO LINK" />
-            <TextView
-                android:id="@+id/band_hint"
-                style="@style/SettingHint"
-                android:text="If you see &quot;Signal Weak&quot; near houses, try 5.8 GHz: it's usually less crowded than 2.4 GHz (home Wi-Fi). 2.4 GHz reaches farther in open fields." />
-            <RadioGroup
-                android:id="@+id/band"
+            <TextView style="@style/SectionTitle" android:text="GOOGLE DRIVE SYNC" />
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
-                <RadioButton android:id="@+id/band_24" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="2.4 GHz" android:textColor="#FFFFFF" android:textSize="15sp" />
-                <RadioButton android:id="@+id/band_58" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="5.8 GHz" android:textColor="#FFFFFF" android:textSize="15sp" />
-            </RadioGroup>
-            <TextView android:id="@+id/band_status" style="@style/SettingHint" />
+                android:background="@drawable/card_bg"
+                android:orientation="vertical"
+                android:paddingLeft="16dp"
+                android:paddingTop="8dp"
+                android:paddingRight="16dp"
+                android:paddingBottom="10dp">
+                <TextView
+                    style="@style/SettingHint"
+                    android:text="Uploads every photo and video Air Pilot downloads (and your flight logs) to a Drive folder in the background." />
+
+                <LinearLayout style="@style/SettingRow">
+                    <TextView android:id="@+id/drive_account" style="@style/SettingLabel" android:text="Not signed in" />
+                    <Button
+                        android:id="@+id/btn_drive_signin"
+                        style="@style/SecondaryButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="44dp"
+                        android:paddingLeft="14dp"
+                        android:paddingRight="14dp"
+                        android:text="Sign in with Google"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/SettingRow">
+                    <TextView style="@style/SettingLabel" android:text="Sync to Google Drive" />
+                    <Switch android:id="@+id/sw_drive" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/SettingRow">
+                    <TextView style="@style/SettingLabel" android:text="Drive folder" />
+                    <EditText
+                        android:id="@+id/et_drive_folder"
+                        android:layout_width="200dp"
+                        android:layout_height="wrap_content"
+                        android:gravity="end"
+                        android:imeOptions="actionDone"
+                        android:inputType="text"
+                        android:singleLine="true"
+                        android:textColor="@color/text_primary"
+                        android:textSize="16sp" />
+                </LinearLayout>
+                <TextView style="@style/SettingHint" android:text="Use / for subfolders, e.g. Drone/Air Pilot. Air Pilot creates the folder." />
+
+                <LinearLayout style="@style/SettingRow">
+                    <TextView style="@style/SettingLabel" android:text="Only upload on Wi-Fi" />
+                    <Switch android:id="@+id/sw_drive_wifi" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/SettingRow">
+                    <TextView style="@style/SettingLabel" android:text="Also upload flight logs (CSV)" />
+                    <Switch android:id="@+id/sw_drive_logs" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/drive_status"
+                    style="@style/SettingHint"
+                    android:layout_marginTop="4dp" />
+
+                <!-- ===== Drone ===== -->
+            </LinearLayout>
+            <TextView style="@style/SectionTitle" android:text="DRONE SAFETY  (saved to the drone)" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/card_bg"
+                android:orientation="vertical"
+                android:paddingLeft="16dp"
+                android:paddingTop="8dp"
+                android:paddingRight="16dp"
+                android:paddingBottom="10dp">
+                <TextView
+                    android:id="@+id/drone_hint"
+                    style="@style/SettingHint"
+                    android:text="Connect the drone to read and change these." />
+
+                <LinearLayout style="@style/SettingRow">
+                    <TextView style="@style/SettingLabel" android:text="Beginner mode" />
+                    <Switch android:id="@+id/sw_beginner" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
+                <TextView style="@style/SettingHint" android:text="Keeps the drone close and low (about 30 m / 100 ft) and slow. Needs GPS." />
+
+                <LinearLayout style="@style/SettingRow">
+                    <TextView android:id="@+id/lbl_max_alt" style="@style/SettingLabel" android:text="Max altitude" />
+                    <EditText android:id="@+id/et_max_alt" style="@style/SettingNumber" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/SettingRow">
+                    <TextView style="@style/SettingLabel" android:text="Limit distance from home" />
+                    <Switch android:id="@+id/sw_dist_limit" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/SettingRow">
+                    <TextView android:id="@+id/lbl_max_dist" style="@style/SettingLabel" android:text="Max distance" />
+                    <EditText android:id="@+id/et_max_dist" style="@style/SettingNumber" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/SettingRow">
+                    <TextView android:id="@+id/lbl_rth_alt" style="@style/SettingLabel" android:text="Return-to-home altitude" />
+                    <EditText android:id="@+id/et_rth_alt" style="@style/SettingNumber" />
+                </LinearLayout>
+                <TextView style="@style/SettingHint" android:text="Set it higher than nearby trees and buildings." />
+
+                <LinearLayout style="@style/SettingRow">
+                    <TextView style="@style/SettingLabel" android:text="Low battery warning (%)" />
+                    <EditText android:id="@+id/et_low_batt" style="@style/SettingNumber" />
+                </LinearLayout>
+
+            </LinearLayout>
+            <TextView style="@style/SectionTitle" android:text="VIDEO LINK" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/card_bg"
+                android:orientation="vertical"
+                android:paddingLeft="16dp"
+                android:paddingTop="8dp"
+                android:paddingRight="16dp"
+                android:paddingBottom="10dp">
+                <TextView
+                    android:id="@+id/band_hint"
+                    style="@style/SettingHint"
+                    android:text="If you see &quot;Signal Weak&quot; near houses, try 5.8 GHz: it's usually less crowded than 2.4 GHz (home Wi-Fi). 2.4 GHz reaches farther in open fields." />
+                <RadioGroup
+                    android:id="@+id/band"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <RadioButton android:id="@+id/band_24" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="2.4 GHz" android:textColor="@color/text_primary" android:textSize="15sp" />
+                    <RadioButton android:id="@+id/band_58" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="5.8 GHz" android:textColor="@color/text_primary" android:textSize="15sp" />
+                </RadioGroup>
+                <TextView android:id="@+id/band_status" style="@style/SettingHint" />
+            </LinearLayout>
 
             <Button
                 android:id="@+id/btn_save_drone"

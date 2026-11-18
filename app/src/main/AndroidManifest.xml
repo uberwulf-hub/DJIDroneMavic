@@ -71,7 +71,7 @@
             android:launchMode="singleTop"
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|keyboardHidden"
-            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+            android:theme="@style/FlyTheme" />
         <activity
             android:name=".SettingsActivity"
             android:screenOrientation="sensorLandscape"

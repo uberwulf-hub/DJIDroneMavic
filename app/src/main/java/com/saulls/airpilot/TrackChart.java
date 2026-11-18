@@ -16,7 +16,7 @@ public class TrackChart extends View {
     private float[] values = new float[0];
     private String label = "";
     private String unit = "";
-    private int color = Color.parseColor("#4FC3F7");
+    private int color = Ui.ACCENT;
 
     private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint grid = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -26,9 +26,9 @@ public class TrackChart extends View {
         super(c, a);
         line.setStyle(Paint.Style.STROKE);
         line.setStrokeWidth(dp(2));
-        grid.setColor(Color.parseColor("#33FFFFFF"));
+        grid.setColor(Ui.BORDER);
         grid.setStrokeWidth(dp(1));
-        text.setColor(Color.parseColor("#CCFFFFFF"));
+        text.setColor(Ui.TEXT_2);
         text.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12, getResources().getDisplayMetrics()));
     }
 

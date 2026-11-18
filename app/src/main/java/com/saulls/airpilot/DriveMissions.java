@@ -3,7 +3,9 @@ package com.saulls.airpilot;
 import android.content.Context;
 
 import com.google.android.gms.auth.GoogleAuthUtil;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.common.api.Scope;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -13,7 +15,9 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -24,6 +28,13 @@ import java.util.Set;
 final class DriveMissions {
 
     private static final String API = "https://www.googleapis.com/drive/v3/files";
+    /** Lets the phone see plan files the PC's Google Drive app put in the folder, not only ones Air Pilot made. */
+    static final String READ_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+
+    static boolean canReadAll(Context c) {
+        GoogleSignInAccount a = DriveSync.account(c);
+        return a != null && GoogleSignIn.hasPermissions(a, new Scope(READ_SCOPE));
+    }
 
     private DriveMissions() {
     }
@@ -36,13 +47,18 @@ final class DriveMissions {
     static String sync(Context c) throws Exception {
         GoogleSignInAccount acct = DriveSync.account(c);
         if (acct == null) throw new Exception("Sign in to Google Drive in Safety & Settings first.");
-        String token = GoogleAuthUtil.getToken(c, acct.getAccount(), "oauth2:" + DriveSync.SCOPE);
+        String token = GoogleAuthUtil.getToken(c, acct.getAccount(),
+                "oauth2:" + DriveSync.SCOPE + (canReadAll(c) ? " " + READ_SCOPE : ""));
         try {
-            String root = findFolder(token, "Air Pilot", "root");
-            String folder = root == null ? null : findFolder(token, "Missions", root);
-            if (folder == null) return "No plans in Drive yet (folder Air Pilot / Missions).";
+            // Any "Missions" folder inside any "Air Pilot" folder in My Drive.
+            List<String> folders = new ArrayList<>();
+            for (String root : findFolders(token, "Air Pilot", "root")) folders.addAll(findFolders(token, "Missions", root));
+            if (folders.isEmpty()) return "No plans in Drive yet (folder Air Pilot / Missions).";
+            StringBuilder inParents = new StringBuilder("(");
+            for (int i = 0; i < folders.size(); i++) inParents.append(i > 0 ? " or '" : "'").append(folders.get(i)).append("' in parents");
+            inParents.append(")");
             JSONObject res = new JSONObject(get(token, API + "?fields=files(id,name,modifiedTime)&pageSize=200&q="
-                    + URLEncoder.encode("'" + folder + "' in parents and trashed = false", "UTF-8")));
+                    + URLEncoder.encode(inParents + " and trashed = false and name contains '.json'", "UTF-8")));
             JSONArray files = res.optJSONArray("files");
             int added = 0, updated = 0, removed = 0;
             Set<String> present = new HashSet<>();
@@ -89,12 +105,14 @@ final class DriveMissions {
     private static final class AuthError extends Exception {
     }
 
-    private static String findFolder(String token, String name, String parent) throws Exception {
+    private static List<String> findFolders(String token, String name, String parent) throws Exception {
         String q = "name = '" + name.replace("'", "\\'") + "' and mimeType = 'application/vnd.google-apps.folder'"
                 + " and trashed = false and '" + parent + "' in parents";
         JSONArray f = new JSONObject(get(token, API + "?spaces=drive&fields=files(id)&q=" + URLEncoder.encode(q, "UTF-8")))
                 .optJSONArray("files");
-        return f != null && f.length() > 0 ? f.getJSONObject(0).getString("id") : null;
+        List<String> ids = new ArrayList<>();
+        for (int i = 0; f != null && i < f.length(); i++) ids.add(f.getJSONObject(i).getString("id"));
+        return ids;
     }
 
     private static String get(String token, String url) throws Exception {

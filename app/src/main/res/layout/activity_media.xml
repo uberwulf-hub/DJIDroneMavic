@@ -2,7 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background_blue">
+    android:background="@color/bg">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -19,19 +19,16 @@
 
             <Button
                 android:id="@+id/btn_back"
-                android:layout_width="wrap_content"
-                android:layout_height="44dp"
-                android:background="@android:color/transparent"
+                style="@style/GhostButton"
                 android:text="‹ Back"
-                android:textAllCaps="false"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/text_primary"
                 android:textSize="16sp" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Photos &amp; Videos"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/text_primary"
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
@@ -43,14 +40,14 @@
                 android:layout_weight="1"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#B3FFFFFF"
+                android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
 
             <Button
                 android:id="@+id/btn_select"
                 style="@style/SecondaryButton"
                 android:layout_width="wrap_content"
-                android:layout_height="40dp"
+                android:layout_height="44dp"
                 android:paddingLeft="14dp"
                 android:paddingRight="14dp"
                 android:text="Select"
@@ -60,7 +57,7 @@
                 android:id="@+id/btn_select_new"
                 style="@style/SecondaryButton"
                 android:layout_width="wrap_content"
-                android:layout_height="40dp"
+                android:layout_height="44dp"
                 android:layout_marginLeft="8dp"
                 android:paddingLeft="14dp"
                 android:paddingRight="14dp"
@@ -71,7 +68,7 @@
                 android:id="@+id/btn_download"
                 style="@style/BigButton"
                 android:layout_width="wrap_content"
-                android:layout_height="40dp"
+                android:layout_height="44dp"
                 android:layout_marginLeft="8dp"
                 android:paddingLeft="16dp"
                 android:paddingRight="16dp"
@@ -96,24 +93,22 @@
                 android:layout_height="8dp"
                 android:layout_weight="1"
                 android:max="1000"
-                android:progressTint="@color/medium_blue" />
+                android:progressBackgroundTint="@color/surface_2"
+                android:progressTint="@color/accent" />
 
             <TextView
                 android:id="@+id/progress_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginLeft="12dp"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/text_primary"
                 android:textSize="13sp" />
 
             <Button
                 android:id="@+id/btn_cancel"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:background="@android:color/transparent"
+                style="@style/GhostButton"
                 android:text="Cancel"
-                android:textAllCaps="false"
-                android:textColor="#FFB4A0"
+                android:textColor="@color/danger"
                 android:textSize="14sp" />
         </LinearLayout>
 
@@ -135,7 +130,7 @@
                 android:layout_height="match_parent"
                 android:gravity="center"
                 android:padding="32dp"
-                android:textColor="#CCFFFFFF"
+                android:textColor="@color/text_secondary"
                 android:textSize="16sp"
                 android:visibility="gone" />
         </FrameLayout>
@@ -146,7 +141,7 @@
         android:id="@+id/viewer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#F2000000"
+        android:background="#F20B0F14"
         android:clickable="true"
         android:focusable="true"
         android:visibility="gone">
@@ -169,7 +164,7 @@
             android:background="@drawable/check_circle"
             android:gravity="center"
             android:text="▶"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/on_accent"
             android:textSize="30sp"
             android:visibility="gone" />
 
@@ -183,12 +178,9 @@
 
             <Button
                 android:id="@+id/viewer_close"
-                android:layout_width="wrap_content"
-                android:layout_height="44dp"
-                android:background="@android:color/transparent"
+                style="@style/GhostButton"
                 android:text="✕ Close"
-                android:textAllCaps="false"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/text_primary"
                 android:textSize="16sp" />
 
             <TextView
@@ -199,7 +191,7 @@
                 android:layout_weight="1"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#CCFFFFFF"
+                android:textColor="@color/text_secondary"
                 android:textSize="14sp" />
         </LinearLayout>
 
@@ -210,7 +202,7 @@
             android:layout_gravity="start|center_vertical"
             android:gravity="center"
             android:text="‹"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/text_primary"
             android:textSize="44sp" />
 
         <TextView
@@ -220,7 +212,7 @@
             android:layout_gravity="end|center_vertical"
             android:gravity="center"
             android:text="›"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/text_primary"
             android:textSize="44sp" />
 
         <LinearLayout

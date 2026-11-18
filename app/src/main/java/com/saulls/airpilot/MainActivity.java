@@ -115,7 +115,7 @@ public class MainActivity extends Activity {
             int lvl = w.level();
             wt.setText((lvl == 0 ? "\u2714 " : "\u26A0 ") + w.summary(Prefs.isImperial(this))
                     + (lvl == 2 ? " \u2014 too windy to fly" : lvl == 1 ? " \u2014 breezy, fly carefully" : " \u2014 good flying weather"));
-            wt.setTextColor(lvl == 0 ? 0xFF9FE3B0 : lvl == 1 ? 0xFFFFB74D : 0xFFFF5252);
+            wt.setTextColor(lvl == 0 ? Ui.SUCCESS : lvl == 1 ? Ui.WARN : Ui.DANGER);
         });
     }
 

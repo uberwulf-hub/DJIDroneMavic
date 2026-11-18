@@ -16,8 +16,8 @@ android {
         minSdkVersion 23
         // Keep at 30: the DJI SDK v4 is not compatible with newer target SDK behaviour.
         targetSdkVersion 30
-        versionCode 20
-        versionName "1.4.0"
+        versionCode 21
+        versionName "1.5.0"
         multiDexEnabled true
         vectorDrawables.useSupportLibrary = true
         manifestPlaceholders = [djiApiKey: djiApiKey]

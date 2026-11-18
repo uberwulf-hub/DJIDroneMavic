@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background_blue"
+    android:background="@color/bg"
     android:orientation="vertical"
     android:paddingLeft="24dp"
     android:paddingRight="24dp">
@@ -15,12 +15,9 @@
 
         <Button
             android:id="@+id/btn_back"
-            android:layout_width="wrap_content"
-            android:layout_height="44dp"
-            android:background="@android:color/transparent"
+            style="@style/GhostButton"
             android:text="‹ Back"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/text_primary"
             android:textSize="16sp" />
 
         <TextView
@@ -30,7 +27,7 @@
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/text_primary"
             android:textSize="20sp"
             android:textStyle="bold" />
 
@@ -38,7 +35,7 @@
             android:id="@+id/btn_csv"
             style="@style/SecondaryButton"
             android:layout_width="wrap_content"
-            android:layout_height="40dp"
+            android:layout_height="44dp"
             android:paddingLeft="14dp"
             android:paddingRight="14dp"
             android:text="Export CSV"
@@ -48,7 +45,7 @@
             android:id="@+id/btn_gpx"
             style="@style/SecondaryButton"
             android:layout_width="wrap_content"
-            android:layout_height="40dp"
+            android:layout_height="44dp"
             android:layout_marginLeft="8dp"
             android:paddingLeft="14dp"
             android:paddingRight="14dp"
@@ -57,13 +54,10 @@
 
         <Button
             android:id="@+id/btn_delete"
-            android:layout_width="wrap_content"
-            android:layout_height="40dp"
+            style="@style/GhostButton"
             android:layout_marginLeft="4dp"
-            android:background="@android:color/transparent"
             android:text="Delete"
-            android:textAllCaps="false"
-            android:textColor="#FFB4A0"
+            android:textColor="@color/danger"
             android:textSize="14sp" />
     </LinearLayout>
 
@@ -91,7 +85,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:lineSpacingExtra="4dp"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/text_primary"
                     android:textSize="15sp" />
 
                 <TextView
@@ -100,7 +94,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:lineSpacingExtra="3dp"
-                    android:textColor="#FFD54F"
+                    android:textColor="@color/warn"
                     android:textSize="14sp" />
 
                 <TextView
@@ -109,7 +103,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:lineSpacingExtra="3dp"
-                    android:textColor="#B3E5FC"
+                    android:textColor="@color/accent_soft"
                     android:textIsSelectable="true"
                     android:textSize="13sp" />
 

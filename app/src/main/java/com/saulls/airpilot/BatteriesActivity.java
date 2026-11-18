@@ -29,7 +29,7 @@ public class BatteriesActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(getResources().getColor(R.color.background_blue));
+        root.setBackgroundColor(Ui.BG);
         root.setPadding(pad, 0, pad, 0);
 
         LinearLayout bar = new LinearLayout(this);
@@ -38,22 +38,26 @@ public class BatteriesActivity extends Activity {
         Button back = new Button(this);
         back.setText("‹ Back");
         back.setAllCaps(false);
-        back.setTextColor(Color.WHITE);
+        back.setTextColor(Ui.TEXT);
         back.setTextSize(16);
-        back.setBackgroundColor(Color.TRANSPARENT);
+        back.setBackgroundResource(R.drawable.button_ghost_bg);
+        back.setStateListAnimator(null);
+        back.setMinHeight(DensityUtil.dip2px(this, 48));
+        back.setMinimumHeight(DensityUtil.dip2px(this, 48));
         back.setOnClickListener(v -> finish());
         bar.addView(back);
         TextView title = new TextView(this);
         title.setText("Batteries");
-        title.setTextColor(Color.WHITE);
+        title.setTextColor(Ui.TEXT);
         title.setTextSize(20);
+        title.setPadding(DensityUtil.dip2px(this, 8), 0, 0, 0);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         bar.addView(title);
         root.addView(bar);
 
         TextView hint = new TextView(this);
         hint.setText("Each battery is recognised by its serial number the first time it's in the drone. Tap one to rename it.");
-        hint.setTextColor(0x99FFFFFF);
+        hint.setTextColor(Ui.TEXT_2);
         hint.setTextSize(13);
         root.addView(hint);
 
@@ -77,7 +81,7 @@ public class BatteriesActivity extends Activity {
         if (packs.isEmpty()) {
             TextView t = new TextView(this);
             t.setText("No batteries yet. Connect the drone and they'll show up here.");
-            t.setTextColor(0xCCFFFFFF);
+            t.setTextColor(Ui.TEXT_2);
             t.setTextSize(15);
             t.setPadding(0, DensityUtil.dip2px(this, 24), 0, 0);
             list.addView(t);
@@ -88,9 +92,8 @@ public class BatteriesActivity extends Activity {
         for (BatteryBook.Pack p : packs) {
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
-            int cp = DensityUtil.dip2px(this, 14);
+            int cp = DensityUtil.dip2px(this, 16);
             card.setPadding(cp, cp, cp, cp);
-            card.setBackgroundResource(R.drawable.hud_bg);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             lp.topMargin = DensityUtil.dip2px(this, 12);
@@ -100,19 +103,20 @@ public class BatteriesActivity extends Activity {
             int color;
             if (h >= 0 && h < 70) {
                 status = "Worn — consider replacing";
-                color = 0xFFFF5252;
+                color = Ui.DANGER;
             } else if ((h >= 0 && h < 85) || (!Double.isNaN(p.maxTempC) && p.maxTempC >= 65)) {
                 status = h >= 0 && h < 85 ? "Getting older — expect shorter flights" : "Has run hot — avoid long Sport flights";
-                color = 0xFFFFB74D;
+                color = Ui.WARN;
             } else {
                 status = "Good";
-                color = 0xFF9FE3B0;
+                color = Ui.SUCCESS;
             }
             boolean inDrone = p.serial.equals(now.batterySerial);
+            card.setBackground(Ui.cardButton(this, inDrone));
 
             TextView name = new TextView(this);
             name.setText(p.name + (inDrone ? "   ● in the drone" : ""));
-            name.setTextColor(Color.WHITE);
+            name.setTextColor(Ui.TEXT);
             name.setTextSize(18);
             name.setTypeface(null, android.graphics.Typeface.BOLD);
             card.addView(name);
@@ -136,7 +140,7 @@ public class BatteriesActivity extends Activity {
             d.append("\nSerial ").append(p.serial);
             TextView details = new TextView(this);
             details.setText(d);
-            details.setTextColor(0xDDFFFFFF);
+            details.setTextColor(Ui.TEXT_2);
             details.setTextSize(14);
             details.setLineSpacing(DensityUtil.dip2px(this, 3), 1f);
             details.setPadding(0, DensityUtil.dip2px(this, 6), 0, 0);

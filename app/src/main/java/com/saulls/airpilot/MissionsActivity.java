@@ -34,6 +34,7 @@ public class MissionsActivity extends Activity {
 
     public static final String EXTRA_SHOW = "show";
     private static final int RC_IMPORT = 42;
+    private static final int RC_DRIVE_READ = 43;
     public static final String PLANNER_URL = "https://uberwulf-hub.github.io/DJIDroneMavic/";
 
     private LinearLayout list;
@@ -50,7 +51,7 @@ public class MissionsActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(getResources().getColor(R.color.background_blue));
+        root.setBackgroundColor(Ui.BG);
         root.setPadding(pad, 0, pad, pad / 2);
 
         LinearLayout bar = new LinearLayout(this);
@@ -61,8 +62,9 @@ public class MissionsActivity extends Activity {
         bar.addView(back);
         TextView title = new TextView(this);
         title.setText("Missions");
-        title.setTextColor(Color.WHITE);
+        title.setTextColor(Ui.TEXT);
         title.setTextSize(20);
+        title.setPadding(DensityUtil.dip2px(this, 8), 0, 0, 0);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         bar.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         Button planner = pill("Open planner");
@@ -71,7 +73,7 @@ public class MissionsActivity extends Activity {
         Button sync = pill("\u27F3 Drive");
         sync.setOnClickListener(v -> syncDrive(true));
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
-                DensityUtil.dip2px(this, 40));
+                DensityUtil.dip2px(this, 48));
         sp.leftMargin = DensityUtil.dip2px(this, 8);
         bar.addView(sync, sp);
         Button imp = pill("Import file");
@@ -82,7 +84,7 @@ public class MissionsActivity extends Activity {
             startActivityForResult(i, RC_IMPORT);
         });
         LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
-                DensityUtil.dip2px(this, 40));
+                DensityUtil.dip2px(this, 48));
         ip.leftMargin = DensityUtil.dip2px(this, 8);
         bar.addView(imp, ip);
         root.addView(bar);
@@ -112,17 +114,18 @@ public class MissionsActivity extends Activity {
         LinearLayout foot = new LinearLayout(this);
         foot.setGravity(Gravity.CENTER_VERTICAL);
         details = new TextView(this);
-        details.setTextColor(0xDDFFFFFF);
+        details.setTextColor(Ui.TEXT_2);
         details.setTextSize(13);
         foot.addView(details, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         deleteButton = textButton("Delete");
-        deleteButton.setTextColor(0xFFFFB4A0);
+        deleteButton.setTextColor(Ui.DANGER);
         deleteButton.setOnClickListener(v -> confirmDelete());
         foot.addView(deleteButton);
         flyButton = new Button(this);
         flyButton.setText("Fly this mission");
         flyButton.setAllCaps(false);
-        flyButton.setTextColor(Color.WHITE);
+        flyButton.setTextColor(getColorStateList(R.color.on_accent_text));
+        flyButton.setStateListAnimator(null);
         flyButton.setTextSize(16);
         flyButton.setTypeface(null, android.graphics.Typeface.BOLD);
         flyButton.setBackgroundResource(R.drawable.button_bg);
@@ -161,6 +164,12 @@ public class MissionsActivity extends Activity {
                     .setPositiveButton("OK", null).show();
             return;
         }
+        if (userAsked && !DriveMissions.canReadAll(this)) {
+            // One-time: allow reading plans that the PC's Google Drive app copied into the folder.
+            com.google.android.gms.auth.api.signin.GoogleSignIn.requestPermissions(this, RC_DRIVE_READ,
+                    DriveSync.account(this), new com.google.android.gms.common.api.Scope(DriveMissions.READ_SCOPE));
+            return;
+        }
         syncing = true;
         String keep = selected == null ? null : selected.id;
         new Thread(() -> {
@@ -192,9 +201,12 @@ public class MissionsActivity extends Activity {
         Button b = new Button(this);
         b.setText(t);
         b.setAllCaps(false);
-        b.setTextColor(Color.WHITE);
+        b.setTextColor(Ui.TEXT);
         b.setTextSize(15);
-        b.setBackgroundColor(Color.TRANSPARENT);
+        b.setBackgroundResource(R.drawable.button_ghost_bg);
+        b.setStateListAnimator(null);
+        b.setMinHeight(DensityUtil.dip2px(this, 48));
+        b.setMinimumHeight(DensityUtil.dip2px(this, 48));
         return b;
     }
 
@@ -214,7 +226,7 @@ public class MissionsActivity extends Activity {
             t.setText("No missions yet.\n\n1. On a computer, open the planner:\n" + PLANNER_URL
                     + "\n\n2. Draw a path, then either Send to phone (scan the QR code) or \u2601 Save to Drive. "
                     + "Plans saved to Drive appear here automatically.");
-            t.setTextColor(0xCCFFFFFF);
+            t.setTextColor(Ui.TEXT_2);
             t.setTextSize(14);
             t.setTextIsSelectable(true);
             list.addView(t);
@@ -227,15 +239,16 @@ public class MissionsActivity extends Activity {
             TextView row = new TextView(this);
             row.setText((m.id.startsWith("d_") ? "\u2601 " : "") + m.name + "\n" + ("orbit".equals(m.kind) ? "Orbit" : "custom".equals(m.kind) ? "Custom path" : "Roof sweep") + " · "
                     + m.wps.size() + " points · " + Units.duration(m.estimatedSeconds()));
-            row.setTextColor(Color.WHITE);
+            row.setTextColor(Ui.TEXT);
             row.setTextSize(15);
-            int p = DensityUtil.dip2px(this, 10);
+            row.setLineSpacing(DensityUtil.dip2px(this, 2), 1f);
+            int p = DensityUtil.dip2px(this, 12);
             row.setPadding(p, p, p, p);
-            row.setBackgroundResource(m == show ? R.drawable.button_secondary_bg : 0);
+            row.setBackground(Ui.cardButton(this, m == show));
             row.setOnClickListener(v -> refresh(m.id));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT);
-            lp.topMargin = DensityUtil.dip2px(this, 6);
+            lp.topMargin = DensityUtil.dip2px(this, 8);
             list.addView(row, lp);
         }
         select(show);
@@ -318,6 +331,12 @@ public class MissionsActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == RC_DRIVE_READ) {
+            syncing = false;
+            if (resultCode == RESULT_OK) syncDrive(false);
+            else Toast.makeText(this, "Without that, only plans saved by the planner's \u2601 button show up.", Toast.LENGTH_LONG).show();
+            return;
+        }
         if (requestCode != RC_IMPORT || resultCode != RESULT_OK || data == null || data.getData() == null) return;
         try (InputStream s = getContentResolver().openInputStream(data.getData())) {
             Mission m = Mission.fromStream(s);

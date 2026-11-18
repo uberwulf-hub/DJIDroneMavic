@@ -7,78 +7,122 @@
 <meta name="description" content="Plan custom flight paths, roof sweeps and orbits for Air Pilot, then send them to the phone.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
-<meta name="theme-color" content="#242d34">
+<meta name="theme-color" content="#0b0f14">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root {
-    --bg: #1b2227; --panel: #242d34; --line: #3a4750; --text: #f2f5f7; --muted: #a9b6bf;
-    --accent: #2f9a9a; --accent-2: #ffd54f; --warn: #ffb74d; --bad: #ff6b6b; --good: #8fe0a6;
+    --bg: #0b0f14; --panel: #0f141b; --card: #151b23; --card-2: #1b2330; --line: #232c38; --text: #e6edf3; --muted: #8b98a5;
+    --accent: #3da9fc; --accent-ink: #04121f; --accent-2: #fbbf24; --warn: #fbbf24; --bad: #f87171; --good: #4ade80;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  .app { display: grid; grid-template-columns: 380px 1fr; height: 100%; }
-  aside { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 16px 18px 28px; }
-  #map { height: 100%; }
-  h1 { font-size: 20px; margin: 0 0 2px; }
-  .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
-  .tabs { display: flex; gap: 6px; margin: 8px 0 12px; }
-  .tabs button { flex: 1; padding: 9px 6px; border-radius: 10px; border: 1px solid var(--line);
-    background: transparent; color: var(--text); font-weight: 600; cursor: pointer; font-size: 14px; }
-  .tabs button.on { background: var(--accent); border-color: var(--accent); }
-  .step { background: #1f272d; border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
-  .step h2 { font-size: 13px; letter-spacing: .06em; color: var(--accent-2); margin: 0 0 8px; text-transform: uppercase; }
-  .help { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
-  label.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 7px 0; }
-  label.row span { flex: 1; }
-  input[type=number], input[type=text], select { width: 120px; padding: 7px 8px; border-radius: 8px;
-    border: 1px solid var(--line); background: #151b1f; color: var(--text); font: inherit; }
+    font: 14px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  .app { display: grid; grid-template-columns: 372px 1fr; height: 100%; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .top { padding: 16px 16px 10px; }
+  .scroll { flex: 1; overflow-y: auto; padding: 0 16px 12px; min-height: 0; }
+  .scroll::-webkit-scrollbar { width: 8px; } .scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+  .foot { border-top: 1px solid var(--line); padding: 12px 16px 14px; background: var(--panel); }
+  #map { height: 100%; background: #05080b; }
+  h1 { font-size: 17px; margin: 0; font-weight: 700; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
+  h1 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+  .tabs { display: flex; gap: 2px; margin: 12px 0 0; padding: 3px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  .tabs button { flex: 1; padding: 8px 6px; border-radius: 9px; border: 0; background: transparent; color: var(--muted);
+    font: 600 13px/1 inherit; font-family: inherit; cursor: pointer; transition: background .15s, color .15s; }
+  .tabs button:hover { color: var(--text); }
+  .tabs button.on { background: var(--card-2); color: var(--text); box-shadow: 0 1px 0 #ffffff10 inset; }
+  .step { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 0 14px; margin-top: 10px; }
+  .step > :last-child { margin-bottom: 14px; }
+  .step h2 { font-size: 13px; font-weight: 600; color: var(--text); margin: 0; padding: 13px 0; display: flex; align-items: center; gap: 8px; }
+  .step h2 .meta { margin-left: auto; color: var(--muted); font-weight: 500; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
+  .step.acc h2 { cursor: pointer; user-select: none; }
+  .step.acc h2::after { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+    transform: rotate(45deg); margin: -3px 2px 0 4px; transition: transform .2s; flex: none; }
+  .step.acc.open h2::after { transform: rotate(-135deg); margin-top: 3px; }
+  .step.acc:not(.open) > :not(h2) { display: none !important; }
+  .step.acc:not(.open) > h2 { padding-bottom: 13px; }
+  .step.acc:not(.open) { padding-bottom: 0; }
+  .step.acc:not(.open) > :last-child { margin-bottom: 0; }
+  .step.hot { border-color: #3da9fc66; }
+  .help { color: var(--muted); font-size: 12.5px; margin: 0 0 8px; }
+  label.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0; }
+  label.row span { flex: 1; color: #c5d0da; }
+  input[type=number], input[type=text], select { width: 128px; padding: 7px 9px; border-radius: 9px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; outline: none; transition: border-color .15s; }
+  input:focus, select:focus { border-color: var(--accent); }
   input[type=range] { width: 130px; accent-color: var(--accent); }
   .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  button.b, label.b { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: transparent;
-    color: var(--text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
-  button.b.primary { background: var(--accent); border-color: var(--accent); }
-  button.b.on { background: #3b2f12; border-color: var(--accent-2); color: var(--accent-2); }
-  button.b.danger { color: #ffb4a0; }
-  button.b:disabled { opacity: .4; cursor: default; }
-  .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 12px; font-size: 13px; color: var(--muted); }
-  .stats b { display: block; font-size: 17px; color: var(--text); }
-  .warn { color: var(--warn); font-size: 13px; margin: 6px 0 0; }
-  .bad { color: var(--bad); font-size: 13px; margin: 6px 0 0; }
-  .ok { color: var(--good); font-size: 13px; margin: 6px 0 0; }
-  .search { display: flex; gap: 6px; margin-bottom: 12px; position: relative; }
-  .search input { flex: 1; width: auto; }
-  .sugg { position: absolute; top: 40px; left: 0; right: 0; z-index: 1000; background: #151b1f;
-    border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: none; }
-  .sugg div { padding: 9px 10px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #222b31; }
+  button.b, label.b { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card-2);
+    color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s, opacity .15s; }
+  button.b:hover:not(:disabled), label.b:hover { border-color: #3a4757; background: #212b39; }
+  button.b.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button.b.primary:hover:not(:disabled) { background: #5cb8ff; border-color: #5cb8ff; }
+  button.b.ghost { background: transparent; }
+  button.b.on { background: #fbbf2419; border-color: var(--accent-2); color: var(--accent-2); }
+  button.b.danger { color: #fca5a5; }
+  button.b:disabled { opacity: .35; cursor: default; }
+  .stats { display: grid; grid-template-columns: repeat(6, 1fr); font-size: 9.5px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: .04em; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .stats:empty { display: none; }
+  .stats div { padding: 6px 4px; text-align: center; border-left: 1px solid var(--line); white-space: nowrap; }
+  .stats div:first-child { border-left: 0; }
+  .stats b { display: block; font-size: 14px; color: var(--text); text-transform: none; letter-spacing: 0; font-variant-numeric: tabular-nums; margin-top: 1px; }
+  .empty { color: var(--muted); font-size: 12.5px; text-align: center; padding: 6px 0 2px; }
+  .warn { color: var(--warn); font-size: 12.5px; margin: 6px 0 0; }
+  .bad { color: var(--bad); font-size: 12.5px; margin: 6px 0 0; }
+  .ok { color: var(--good); font-size: 12.5px; margin: 6px 0 0; }
+  .actions { display: flex; gap: 8px; margin-top: 10px; }
+  .actions .b { flex: 1; padding: 11px 12px; font-size: 14px; }
+  .search { display: flex; gap: 6px; margin-top: 12px; position: relative; }
+  .search input { flex: 1; width: auto; padding: 9px 11px; }
+  .sugg { position: absolute; top: 42px; left: 0; right: 0; z-index: 1000; background: var(--card-2);
+    border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: none; box-shadow: 0 12px 30px #0009; }
+  .sugg div { padding: 9px 11px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--line); }
   .sugg div:last-child { border-bottom: 0; }
-  .sugg div:hover, .sugg div.on { background: var(--accent); }
-  .pt-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .pt-head b { flex: 1; font-size: 16px; }
-  .plist { list-style: none; padding: 0; margin: 8px 0 0; max-height: 210px; overflow-y: auto; }
-  .plist li { display: flex; gap: 8px; align-items: center; padding: 5px 8px; border-radius: 8px; cursor: pointer; font-size: 13px; }
-  .plist li:hover { background: #2a343b; }
-  .plist li.sel { background: var(--accent); }
-  .num { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: #4fc3f7; color: #0b1a22;
-    font-weight: 700; font-size: 12px; align-items: center; justify-content: center; flex: none; }
-  .pin { background: #4fc3f7; color: #0b1a22; border: 2px solid #fff; border-radius: 50%; width: 26px; height: 26px;
-    display: flex; align-items: center; justify-content: center; font: 700 12px system-ui; box-shadow: 0 1px 4px #0008; }
+  .sugg div:hover, .sugg div.on { background: #3da9fc26; }
+  .plist li .when { color: var(--muted); font-size: 11.5px; }
+  .plist li.sel .when { color: #b9dcff; }
+  .dirty { color: var(--accent-2); }
+  .copy { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; }
+  .copy > span { color: var(--muted); font-size: 12.5px; margin-right: 6px; }
+  .copy select { width: auto; padding: 5px 8px; }
+  .copy .btns .b { padding: 6px 10px; font-size: 12.5px; }
+  .pt-head { display: flex; align-items: center; gap: 8px; padding-top: 12px; }
+  .pt-head b { flex: 1; font-size: 14px; text-align: center; }
+  .plist { list-style: none; padding: 0; margin: 0 0 4px; max-height: 220px; overflow-y: auto; }
+  .plist li { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 9px; cursor: pointer; font-size: 13px; }
+  .plist li:hover { background: var(--card-2); }
+  .plist li.sel { background: #3da9fc26; }
+  .num { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+    font-weight: 700; font-size: 11px; align-items: center; justify-content: center; flex: none; }
+  .pin { background: var(--accent); color: var(--accent-ink); border: 2px solid #fff; border-radius: 50%; width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center; font: 700 12px system-ui; box-shadow: 0 2px 8px #000a; }
   .pin.sel { background: var(--accent-2); transform: scale(1.25); }
-  .pin.first { background: #ff6b6b; color: #fff; }
+  .pin.first { background: var(--bad); color: #fff; }
   .tgt { font-size: 26px; line-height: 26px; text-align: center; filter: drop-shadow(0 1px 2px #000); }
-  details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 6px; }
-  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px;
-    max-width: 440px; padding: 20px; }
-  dialog::backdrop { background: rgba(0,0,0,.6); }
-  #qr { background: #fff; padding: 12px; border-radius: 10px; display: inline-block; margin: 8px 0; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin: 8px 0 4px; }
+  dialog { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 16px;
+    max-width: 440px; padding: 22px; box-shadow: 0 30px 80px #000c; }
+  dialog::backdrop { background: rgba(3,6,10,.7); backdrop-filter: blur(3px); }
+  dialog h2 { font-size: 17px; }
+  #qr { background: #fff; padding: 12px; border-radius: 12px; display: inline-block; margin: 8px 0; }
+  code { background: var(--bg); padding: 1px 5px; border-radius: 5px; }
+  .lib { list-style: none; padding: 0; margin: 10px 0 0; }
   .lib li { margin: 4px 0; }
-  .lib a { color: var(--accent-2); cursor: pointer; }
-  .wrap { position: relative; }
-  .hint { position: absolute; z-index: 500; left: 50%; transform: translateX(-50%); top: 12px; background: rgba(27,34,39,.92);
-    border: 1px solid var(--line); border-radius: 10px; padding: 7px 12px; font-size: 13px; color: var(--text); pointer-events: none; }
+  .lib a { color: var(--accent); cursor: pointer; }
+  .wrap { position: relative; min-height: 0; }
+  .hint { position: absolute; z-index: 500; left: 50%; transform: translateX(-50%); top: 14px; background: rgba(15,20,27,.88);
+    backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; font-size: 13px;
+    color: var(--text); pointer-events: none; box-shadow: 0 6px 20px #0008; }
+  .leaflet-container { font-family: inherit; }
+  .leaflet-bar a { background: var(--card) !important; color: var(--text) !important; border-color: var(--line) !important; }
+  .leaflet-control-attribution { background: rgba(11,15,20,.7) !important; color: var(--muted) !important; }
+  .leaflet-control-attribution a { color: var(--muted) !important; }
+  .leaflet-tooltip { background: var(--card-2); color: var(--text); border: 1px solid var(--line); box-shadow: none; }
+  .leaflet-tooltip-top:before { border-top-color: var(--card-2); }
   @media (max-width: 800px) {
-    .app { grid-template-columns: 1fr; grid-template-rows: 55% 45%; }
+    .app { grid-template-columns: 1fr; grid-template-rows: 50% 50%; }
     .wrap { order: -1; }
     aside { border-right: 0; border-top: 1px solid var(--line); }
   }
@@ -87,8 +131,8 @@
 <body>
 <div class="app">
   <aside>
-    <h1>Air Pilot Planner</h1>
-    <div class="sub">Draw a flight on the map, then send it to the phone.</div>
+   <div class="top">
+    <h1><span class="dot"></span>Air Pilot Planner</h1>
 
     <div class="search">
       <input id="q" type="text" placeholder="Type an address, e.g. 123 Main St Tucson" autocomplete="off">
@@ -102,11 +146,25 @@
       <button id="tab-sweep">Roof sweep</button>
       <button id="tab-orbit">Orbit</button>
     </div>
+   </div>
+   <div class="scroll">
+    <div class="step acc" id="folder-step">
+      <h2>📁 My missions<span class="meta" id="meta-folder"></span></h2>
+      <p class="help" id="folder-help">Pick the folder your plans live in, e.g. <b>Google Drive › My Drive › Air Pilot › Missions</b>.
+        Click a plan to open it, change it, then <b>💾 Save</b> (Ctrl+S) writes it back. Plans in that Drive folder show up on the phone too.</p>
+      <div class="btns">
+        <button class="b" id="pick-folder">Choose folder…</button>
+        <button class="b" id="reconnect" hidden>Reconnect folder</button>
+        <button class="b" id="new-plan">＋ New plan</button>
+        <button class="b" id="saveas" disabled>Save as new</button>
+      </div>
+      <ul class="plist" id="flist" style="margin-top:8px"></ul>
+    </div>
 
     <!-- ===================== CUSTOM PATH ===================== -->
     <div id="panel-custom">
       <div class="step">
-        <h2>1 · Draw the path</h2>
+        <h2>Draw the path<span class="meta" id="meta-draw"></span></h2>
         <p class="help"><b>Click</b> the map to add a point · <b>drag</b> a point to move it · <b>click a point</b> to edit it ·
           <b>click the yellow line</b> to insert a point.</p>
         <div class="btns">
@@ -125,7 +183,7 @@
         </details>
       </div>
 
-      <div class="step" id="editor" hidden>
+      <div class="step hot" id="editor" hidden>
         <div class="pt-head">
           <button class="b" id="prev">◀</button>
           <b id="ed-title">Point 1</b>
@@ -147,13 +205,23 @@
         <label class="row"><span>Speed to next point</span>
           <select id="ed-speed"><option value="0">Same as mission</option><option value="1.5">Slow</option><option value="2.5">Normal</option><option value="5">Fast</option><option value="8">Very fast</option></select></label>
         <div class="btns">
-          <button class="b" id="alt-all">Use this height for all</button>
           <button class="b danger" id="del">Delete point</button>
+        </div>
+        <div class="copy">
+          <span>Copy to</span>
+          <select id="copy-to"><option value="all">all points</option><option value="after">points after this</option></select>
+          <div class="btns">
+            <button class="b" data-copy="alt">Height</button>
+            <button class="b" data-copy="tilt">Camera tilt</button>
+            <button class="b" data-copy="face">Facing</button>
+            <button class="b" data-copy="action">Action</button>
+            <button class="b" data-copy="speed">Speed</button>
+          </div>
         </div>
       </div>
 
-      <div class="step" id="list-step" hidden>
-        <h2>Points</h2>
+      <div class="step acc" id="list-step" hidden>
+        <h2>All points<span class="meta" id="meta-pts"></span></h2>
         <ul class="plist" id="plist"></ul>
       </div>
     </div>
@@ -161,7 +229,7 @@
     <!-- ===================== ROOF SWEEP ===================== -->
     <div id="panel-sweep" hidden>
       <div class="step">
-        <h2>1 · Trace the roof edge</h2>
+        <h2>Trace the roof edge<span class="meta" id="meta-edge"></span></h2>
         <p class="help">Click the two ends of the roof's <b>lower edge</b> (gutter line). The drone flies side to side in rows,
           stepping up, with the camera on the tiles.</p>
         <div class="btns">
@@ -170,8 +238,8 @@
           <button class="b" id="edit-sweep" disabled>✎ Edit as points</button>
         </div>
       </div>
-      <div class="step">
-        <h2>2 · Roof</h2>
+      <div class="step acc">
+        <h2>Roof<span class="meta" id="meta-roof"></span></h2>
         <label class="row"><span>Gutter height (ft)</span><input id="eave" type="number" value="10" min="0" step="1"></label>
         <label class="row"><span>Peak height (ft)</span><input id="ridge" type="number" value="18" min="0" step="1"></label>
         <label class="row"><span>Distance from roof (ft)</span><input id="standoff" type="number" value="25" min="15" step="1"></label>
@@ -187,7 +255,7 @@
     <!-- ===================== ORBIT ===================== -->
     <div id="panel-orbit" hidden>
       <div class="step">
-        <h2>1 · Outline the building</h2>
+        <h2>Outline the building<span class="meta" id="meta-outline"></span></h2>
         <p class="help">Click each corner, then click the first corner again (or <b>Done</b>). The drone circles it with the camera on it.</p>
         <div class="btns">
           <button class="b" id="done-orbit">Done</button>
@@ -195,8 +263,8 @@
           <button class="b" id="edit-orbit" disabled>✎ Edit as points</button>
         </div>
       </div>
-      <div class="step">
-        <h2>2 · Building</h2>
+      <div class="step acc">
+        <h2>Building<span class="meta" id="meta-bld"></span></h2>
         <label class="row"><span>Top height (ft)</span><input id="oridge" type="number" value="18" min="0" step="1"></label>
         <label class="row"><span>Distance from it (ft)</span><input id="ostandoff" type="number" value="25" min="15" step="1"></label>
         <label class="row"><span>Loops</span>
@@ -207,22 +275,19 @@
     </div>
 
     <!-- ===================== SHARED ===================== -->
-    <div class="step">
-      <h2>Flight</h2>
+    <div class="step acc">
+      <h2>Flight settings<span class="meta" id="meta-flight"></span></h2>
       <label class="row"><span>Speed</span>
         <select id="speed"><option value="1.5">Slow</option><option value="2.5" selected>Normal</option><option value="4">Fast</option></select></label>
       <label class="row"><span>When finished</span>
         <select id="finish"><option value="home" selected>Fly home</option><option value="hover">Hover there</option></select></label>
       <p class="help">Heights are from where the drone takes off.</p>
-      <div id="stats" class="stats"></div>
-      <div id="msgs"></div>
     </div>
 
-    <div class="step">
-      <h2>Send to the phone</h2>
+    <div class="step acc">
+      <h2>Save &amp; share<span class="meta" id="meta-save"></span></h2>
       <label class="row"><span>Name</span><input id="name" type="text" placeholder="Backyard reveal" style="width:190px"></label>
       <div class="btns">
-        <button class="b primary" id="send" disabled>Send to phone (QR)</button>
         <button class="b" id="download" disabled>Download file</button>
         <button class="b" id="gsave" disabled>☁ Save to Drive</button>
         <button class="b" id="gopen">☁ Open from Drive</button>
@@ -232,10 +297,21 @@
       <p class="help" id="gstatus" style="margin-top:8px"></p>
       <ul class="lib" id="lib"></ul>
     </div>
+   </div>
+   <div class="foot">
+     <div id="stats" class="stats"></div>
+     <div id="msgs"></div>
+     <div class="actions">
+       <button class="b" id="preview" disabled>▶ Preview</button>
+       <button class="b" id="fsave" disabled hidden title="Save to the missions folder (Ctrl+S)">💾 Save</button>
+       <button class="b primary" id="send" disabled>Send to phone</button>
+     </div>
+   </div>
   </aside>
   <div class="wrap">
     <div id="map"></div>
     <div class="hint" id="hint"></div>
+    <div id="pv" hidden></div>
   </div>
 </div>
 
@@ -272,6 +348,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="plan.js"></script>
+<script src="preview.js"></script>
 <script>
 (function () {
   'use strict';
@@ -296,18 +373,42 @@
   // templates
   var edge = [], side = 1, corners = [], orbitClosed = false;
   var plan = null;
+  var dirty = false, loading = false;
   var draw = L.layerGroup().addTo(map), path = L.layerGroup().addTo(map);
 
   function num(id) { var v = parseFloat($(id).value); return isNaN(v) ? 0 : v; }
   function snapshotPts() { history.push(JSON.stringify({ pts: pts, target: target })); if (history.length > 50) history.shift(); }
 
   // ---------- modes
+  // ---------- accordion: one section open at a time keeps the panel short
+  function openStep(step, on) {
+    if (on) document.querySelectorAll('.step.acc.open').forEach(function (x) { if (x !== step) x.classList.remove('open'); });
+    step.classList.toggle('open', on);
+  }
+  document.querySelectorAll('.step.acc > h2').forEach(function (h) {
+    h.addEventListener('click', function () { openStep(h.parentNode, !h.parentNode.classList.contains('open')); });
+  });
+  function setMeta(id, t) { if ($(id)) $(id).textContent = t || ''; }
+  function updateMeta() {
+    var sp = $('speed'), fi = $('finish');
+    setMeta('meta-flight', sp.options[sp.selectedIndex].text + ' · ' + fi.options[fi.selectedIndex].text.toLowerCase());
+    setMeta('meta-save', $('name').value.trim());
+    setMeta('meta-draw', pts.length ? pts.length + ' point' + (pts.length > 1 ? 's' : '') : '');
+    setMeta('meta-pts', pts.length + '');
+    setMeta('meta-edge', edge.length === 2 ? '✔ traced' : edge.length + ' / 2');
+    setMeta('meta-roof', num('eave') + '–' + num('ridge') + ' ft · ' + num('standoff') + ' ft away');
+    setMeta('meta-outline', orbitClosed ? '✔ ' + corners.length + ' corners' : corners.length ? corners.length + ' corners' : '');
+    setMeta('meta-bld', num('oridge') + ' ft · ' + $('rings').value + ' loop' + ($('rings').value === '1' ? '' : 's'));
+  }
+
   function setMode(m) {
     mode = m;
     ['custom', 'sweep', 'orbit'].forEach(function (k) {
       $('tab-' + k).classList.toggle('on', k === m);
       $('panel-' + k).hidden = k !== m;
     });
+    var first = $('panel-' + m).querySelector('.step.acc');
+    if (first) openStep(first, true);
     placingTarget = false;
     update();
   }
@@ -326,6 +427,7 @@
       } else {
         pts.push(newPoint(p));
         sel = pts.length - 1;
+        $('folder-step').classList.remove('open'); // make room for the point editor
       }
     } else if (mode === 'sweep') {
       if (edge.length >= 2) edge = [];
@@ -374,7 +476,23 @@
   $('ed-action').addEventListener('change', function () { edit(function (q) { q.action = $('ed-action').value; }); });
   $('ed-hover').addEventListener('change', function () { edit(function (q) { q.hover = Math.max(1, Math.min(60, num('ed-hover'))); }); });
   $('ed-speed').addEventListener('change', function () { edit(function (q) { q.speed = parseFloat($('ed-speed').value); }); });
-  $('alt-all').onclick = function () { if (sel < 0) return; snapshotPts(); var a = pts[sel].alt; pts.forEach(function (q) { q.alt = a; }); update(true); };
+  // Copy one setting from this point to all points (or the ones after it).
+  var COPY = { alt: ['alt'], tilt: ['tilt'], face: ['face', 'heading'], action: ['action', 'hover'], speed: ['speed'] };
+  var COPY_NAME = { alt: 'Height', tilt: 'Camera tilt', face: 'Facing', action: 'Action', speed: 'Speed' };
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.onclick = function () {
+      if (sel < 0 || !pts[sel]) return;
+      var k = b.getAttribute('data-copy'), src = pts[sel], from = $('copy-to').value === 'after' ? sel + 1 : 0, n = 0;
+      if (k === 'face' && src.face === 'target' && !target) return;
+      snapshotPts();
+      for (var i = from; i < pts.length; i++) {
+        if (i === sel) continue;
+        COPY[k].forEach(function (f) { pts[i][f] = src[f]; }); n++;
+      }
+      update(true);
+      hintFlash('✔ ' + COPY_NAME[k] + ' copied to ' + n + ' point' + (n === 1 ? '' : 's') + '  (Ctrl+Z to undo)');
+    };
+  });
   $('del').onclick = function () { if (sel < 0) return; snapshotPts(); pts.splice(sel, 1); sel = Math.min(sel, pts.length - 1); update(); };
   $('prev').onclick = function () { if (pts.length) { sel = (sel - 1 + pts.length) % pts.length; update(true); } };
   $('next').onclick = function () { if (pts.length) { sel = (sel + 1) % pts.length; update(true); } };
@@ -498,11 +616,16 @@
     if (plan && mode !== 'custom') drawGenerated(plan);
     if (plan && mode === 'custom') drawAim(plan);
     renderStats(plan, msgs);
-    ['send', 'download', 'save', 'gsave'].forEach(function (id) { $(id).disabled = !plan; });
+    ['send', 'download', 'save', 'gsave', 'preview'].forEach(function (id) { $(id).disabled = !plan; });
+    if (!loading) dirty = true;
+    folderUi();
+    updateMeta();
     $('edit-sweep').disabled = !(plan && mode === 'sweep');
     $('edit-orbit').disabled = !(plan && mode === 'orbit');
   }
 
+  var flashT = null;
+  function hintFlash(t) { hint(t); clearTimeout(flashT); flashT = setTimeout(function () { var l = loading; loading = true; update(true); loading = l; }, 2200); }
   function hint(t) { $('hint').textContent = t; $('hint').style.display = t ? 'block' : 'none'; }
 
   function drawAim(pl) {
@@ -542,6 +665,8 @@
   function renderStats(pl, msgs) {
     if (!pl) {
       $('stats').innerHTML = '';
+      if (!msgs.length) msgs.push('<div class="empty">' + (mode === 'custom' ? 'Add at least two points to make a flight.' :
+        mode === 'sweep' ? 'Trace the roof edge to make a flight.' : 'Outline the building to make a flight.') + '</div>');
       $('msgs').innerHTML = msgs.join('');
       return;
     }
@@ -550,9 +675,9 @@
       '<div>Points<b>' + pl.wp.length + '</b></div>' +
       '<div>Photos<b>' + p.photos + '</b></div>' +
       '<div>Time<b>' + fmtTime(p.seconds) + '</b></div>' +
-      '<div>Battery<b>~' + p.battery + '%</b></div>' +
+      '<div>Battery<b>' + p.battery + '%</b></div>' +
       '<div>Path<b>' + Math.round(p.distance / FT) + ' ft</b></div>' +
-      '<div>Highest<b>' + Math.round(p.maxAlt / FT) + ' ft</b></div>';
+      '<div>Max<b>' + Math.round(p.maxAlt / FT) + ' ft</b></div>';
     p.warnings.forEach(function (w) { msgs.push('<p class="warn">⚠ ' + w + '</p>'); });
     if (!p.warnings.length) msgs.push('<p class="ok">✔ Looks good. Check for trees and wires along the path.</p>');
     $('msgs').innerHTML = msgs.join('');
@@ -586,11 +711,14 @@
     $('dlg').showModal();
   };
   $('close').onclick = function () { $('dlg').close(); };
+  $('preview').onclick = function () { if (plan) AirPreview.open(plan, $('pv')); };
   $('copy').onclick = function () { $('link').select(); navigator.clipboard.writeText($('link').value); };
   function fileName(pl) { return (pl.name || 'mission').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') + '.airpilot.json'; }
+  /** Plan file: what the phone needs, plus the editor state so the planner can reopen it exactly. */
+  function fileJson(pl) { var o = AirPlan.toTransfer(pl); o._editor = snapshot(); return JSON.stringify(o, null, 1); }
   $('download').onclick = function () {
     if (!plan) return;
-    var blob = new Blob([JSON.stringify(AirPlan.toTransfer(plan), null, 1)], { type: 'application/json' });
+    var blob = new Blob([fileJson(plan)], { type: 'application/json' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = fileName(plan); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
@@ -640,6 +768,12 @@
 
   function loadPlan(m) {
       if (m.app !== 'airpilot-mission') throw new Error('Not an Air Pilot plan');
+      loading = true;
+      try { loadPlanInner(m); } finally { loading = false; }
+      dirty = false; folderUi();
+  }
+  function loadPlanInner(m) {
+      if (m._editor) { restore(m._editor); $('name').value = m.name || m._editor.name || ''; update(true); return; }
       snapshotPts();
       pts = m.wp.map(function (w) {
         var x = w[6] || {};
@@ -712,7 +846,7 @@
       gStatus('Saving to Drive…');
       var folder = await gMissionsFolder();
       var name = fileName(plan);
-      var body = JSON.stringify(AirPlan.toTransfer(plan), null, 1);
+      var body = fileJson(plan);
       var found = await gApi('GET', 'https://www.googleapis.com/drive/v3/files?fields=files(id)&q=' +
         encodeURIComponent("name = '" + q(name) + "' and '" + folder + "' in parents and trashed = false"));
       if (found.files && found.files.length) {
@@ -753,6 +887,120 @@
     } catch (err) { gStatus('Drive: ' + err.message); }
   };
   $('glist-close').onclick = function () { $('glist').close(); };
+
+  // ---------- missions folder on this PC (Edge/Chrome). With Google Drive for desktop it's the Drive folder.
+  var dirH = null, files = [], cur = null; // cur = { name, handle }
+  var HAS_FS = !!window.showDirectoryPicker;
+  function idb(op, val) {
+    return new Promise(function (ok) {
+      try {
+        var r = indexedDB.open('airplan', 1);
+        r.onupgradeneeded = function () { r.result.createObjectStore('kv'); };
+        r.onsuccess = function () {
+          var tx = r.result.transaction('kv', op === 'get' ? 'readonly' : 'readwrite'), st = tx.objectStore('kv');
+          var q2 = op === 'get' ? st.get('dir') : st.put(val, 'dir');
+          q2.onsuccess = function () { ok(q2.result); }; q2.onerror = function () { ok(null); };
+        };
+        r.onerror = function () { ok(null); };
+      } catch (e) { ok(null); }
+    });
+  }
+  function folderUi() {
+    var on = !!dirH;
+    $('fsave').hidden = !on;
+    $('fsave').disabled = !plan;
+    $('saveas').disabled = !(on && plan);
+    $('pick-folder').textContent = on ? 'Change folder…' : 'Choose folder…';
+    var label = on ? dirH.name : '';
+    if (cur) label = (dirty ? '● ' : '') + cur.name.replace(/\.airpilot\.json$|\.json$/, '');
+    $('meta-folder').textContent = label;
+    $('meta-folder').className = 'meta' + (dirty && cur ? ' dirty' : '');
+    Array.prototype.forEach.call($('flist').children, function (li) { li.classList.toggle('sel', !!cur && li.dataset.name === cur.name); });
+  }
+  async function useDir(h, ask) {
+    var opts = { mode: 'readwrite' };
+    var perm = await h.queryPermission(opts);
+    if (perm !== 'granted' && ask) perm = await h.requestPermission(opts);
+    if (perm !== 'granted') { $('reconnect').hidden = false; $('reconnect').textContent = 'Reconnect "' + h.name + '"'; dirH = null; folderUi(); return; }
+    $('reconnect').hidden = true;
+    dirH = h; await idb('put', h); await scan();
+  }
+  async function scan() {
+    if (!dirH) return;
+    files = [];
+    for await (var e of dirH.values()) {
+      if (e.kind === 'file' && /\.json$/i.test(e.name)) {
+        try { var f = await e.getFile(); files.push({ name: e.name, handle: e, modified: f.lastModified }); } catch (err) {}
+      }
+    }
+    files.sort(function (a, b) { return b.modified - a.modified; });
+    var ul = $('flist'); ul.innerHTML = '';
+    if (!files.length) ul.innerHTML = '<li class="help">No plans here yet. Draw one and click 💾 Save.</li>';
+    files.forEach(function (f) {
+      var li = document.createElement('li');
+      li.dataset.name = f.name;
+      li.innerHTML = '<span style="flex:1">' + f.name.replace(/\.airpilot\.json$|\.json$/, '').replace(/_/g, ' ').replace(/</g, '&lt;') +
+        '</span><span class="when">' + new Date(f.modified).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + '</span>';
+      li.onclick = function () { openFile(f); };
+      ul.appendChild(li);
+    });
+    folderUi();
+  }
+  function okToLeave() {
+    return !(dirty && plan && cur) || confirm('You have unsaved changes to "' + cur.name + '". Discard them?');
+  }
+  async function openFile(f) {
+    if (cur && cur.name === f.name) return;
+    if (!okToLeave()) return;
+    try {
+      var m = JSON.parse(await (await f.handle.getFile()).text());
+      cur = { name: f.name, handle: f.handle };
+      loadPlan(m);
+    } catch (err) { alert('Could not open ' + f.name + ': ' + err.message); }
+  }
+  async function writeTo(handle) {
+    var w = await handle.createWritable();
+    await w.write(fileJson(plan)); await w.close();
+  }
+  async function saveToFolder(asNew) {
+    if (!plan) return;
+    if (!dirH) { await pickFolder(); if (!dirH) return; }
+    try {
+      var handle = cur && !asNew ? cur.handle : null, name = cur && !asNew ? cur.name : fileName(plan);
+      if (!handle) {
+        var exists = files.some(function (f) { return f.name.toLowerCase() === name.toLowerCase(); });
+        if (exists && !confirm('"' + name + '" already exists. Replace it?')) return;
+        handle = await dirH.getFileHandle(name, { create: true });
+      }
+      await writeTo(handle);
+      cur = { name: name, handle: handle }; dirty = false;
+      await scan();
+      hintFlash('✔ Saved ' + name);
+    } catch (err) { alert('Could not save: ' + err.message); }
+  }
+  async function pickFolder() {
+    if (!HAS_FS) { alert('Folder access needs Microsoft Edge or Google Chrome. Use Download file / Open file instead.'); return; }
+    try { await useDir(await window.showDirectoryPicker({ id: 'airpilot-missions', mode: 'readwrite' }), true); cur = null; folderUi(); }
+    catch (err) { if (err.name !== 'AbortError') alert(err.message); }
+  }
+  $('pick-folder').onclick = pickFolder;
+  $('reconnect').onclick = async function () { var h = await idb('get'); if (h) await useDir(h, true); };
+  $('fsave').onclick = function () { saveToFolder(false); };
+  $('saveas').onclick = function () {
+    var n = prompt('Name for the new plan:', ($('name').value.trim() || (plan && plan.name) || 'Plan') + ' copy');
+    if (!n) return;
+    $('name').value = n; update(true); saveToFolder(true);
+  };
+  $('new-plan').onclick = function () {
+    if (!okToLeave()) return;
+    loading = true;
+    pts = []; target = null; sel = -1; history = []; edge = []; corners = []; orbitClosed = false;
+    $('name').value = ''; cur = null; setMode(mode);
+    loading = false; dirty = false; folderUi();
+  };
+  window.addEventListener('beforeunload', function (e) { if (dirty && plan && cur) { e.preventDefault(); e.returnValue = ''; } });
+  if (!HAS_FS) $('folder-help').innerHTML += ' <span class="warn">(Needs Edge or Chrome.)</span>';
+  idb('get').then(function (h) { if (h) useDir(h, false).then(function () { if (dirH) openStep($('folder-step'), true); }); else openStep($('folder-step'), true); });
 
   // ---------- search / locate
   // Esri's address search (forgiving, good US coverage, no key needed for searches) with
@@ -831,6 +1079,7 @@
 
 
   document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); if (plan) saveToFolder(false); return; }
     if (mode !== 'custom' || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
     if ((e.key === 'Delete' || e.key === 'Backspace') && sel >= 0) { $('del').click(); e.preventDefault(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { $('undo').click(); e.preventDefault(); }

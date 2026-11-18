@@ -361,7 +361,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         if (s.returnBatteryNeeded > 0 && s.batteryPct > 0) {
             t.append(" \u00B7 needs ~").append(s.returnBatteryNeeded).append("%");
             int margin = s.batteryPct - s.returnBatteryNeeded;
-            color = margin <= 5 ? 0xFFFF5252 : margin <= 15 ? 0xFFFFB74D : 0xFF9FE3B0;
+            color = margin <= 5 ? Ui.DANGER : margin <= 15 ? Ui.WARN : Ui.SUCCESS;
         }
         homeText.setText(t);
         homeText.setTextColor(color);
@@ -651,7 +651,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         int pad = DensityUtil.dip2px(this, 20);
         box.setPadding(pad, pad / 2, pad, 0);
         TextView help = new TextView(this);
-        help.setTextColor(0xFFDDDDDD);
+        help.setTextColor(Ui.TEXT);
         help.setTextSize(14);
         help.setText(follow
                 ? "The drone stays behind you at the set distance and height, camera on you, using your phone's GPS. "
@@ -662,7 +662,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         box.addView(help);
         TextView l1 = new TextView(this);
         l1.setText(follow ? "\nDISTANCE BEHIND YOU" : "\nCIRCLE RADIUS");
-        l1.setTextColor(0xFF2F9A9A);
+        l1.setTextColor(Ui.ACCENT);
         box.addView(l1);
         android.widget.RadioGroup size = radioRow(sizeNames, 1);
         box.addView(size);
@@ -670,7 +670,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         if (follow) {
             TextView l2 = new TextView(this);
             l2.setText("\nHEIGHT");
-            l2.setTextColor(0xFF2F9A9A);
+            l2.setTextColor(Ui.ACCENT);
             box.addView(l2);
             height = radioRow(heightNames, 1);
             box.addView(height);
@@ -737,7 +737,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         int pad = DensityUtil.dip2px(this, 20);
         box.setPadding(pad, pad / 2, pad, 0);
         TextView tips = new TextView(this);
-        tips.setTextColor(0xFFDDDDDD);
+        tips.setTextColor(Ui.TEXT);
         tips.setTextSize(14);
         tips.setText(kind.help + "\n\nTips: hover 3\u201310 m (10\u201330 ft) from the person at head height or a bit above, "
                 + "with the whole body in view. Open areas work best \u2014 the drone can't see obstacles to its sides. "

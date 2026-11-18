@@ -80,7 +80,7 @@ public class FlightDetailActivity extends Activity {
         TextView warn = findViewById(R.id.warnings);
         if (flight.warnings.isEmpty()) {
             warn.setText(flight.track == null ? "" : "No warnings recorded ✓");
-            warn.setTextColor(Color.parseColor("#9FE3B0"));
+            warn.setTextColor(Ui.SUCCESS);
         } else {
             warn.setText("⚠ " + TextUtils.join("\n⚠ ", flight.warnings));
         }
@@ -143,11 +143,11 @@ public class FlightDetailActivity extends Activity {
             bat[i] = r[3];
         }
         ((TrackChart) findViewById(R.id.chart_alt)).setData("Altitude", imperial ? "ft" : "m",
-                Color.parseColor("#4FC3F7"), t, alt);
+                Ui.ACCENT, t, alt);
         ((TrackChart) findViewById(R.id.chart_speed)).setData("Speed", imperial ? "mph" : "km/h",
-                Color.parseColor("#FFD54F"), t, spd);
+                Ui.WARN, t, spd);
         ((TrackChart) findViewById(R.id.chart_batt)).setData("Battery", "%",
-                Color.parseColor("#9FE3B0"), t, bat);
+                Ui.SUCCESS, t, bat);
 
         if (!pts.isEmpty()) {
             Polyline line = new Polyline(map);

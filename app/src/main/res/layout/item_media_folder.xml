@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="130dp"
     android:layout_margin="5dp"
-    android:background="#1AFFFFFF">
+    android:background="@color/surface">
 
     <ImageView
         android:id="@+id/thumb"
@@ -34,7 +34,7 @@
         android:background="@drawable/check_circle"
         android:paddingLeft="8dp"
         android:paddingRight="8dp"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/on_accent"
         android:textSize="12sp"
         android:textStyle="bold" />
 
@@ -51,7 +51,7 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/text_primary"
             android:textSize="16sp"
             android:textStyle="bold" />
 
@@ -59,7 +59,7 @@
             android:id="@+id/sub"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="#DDFFFFFF"
+            android:textColor="#D9E6EDF3"
             android:textSize="13sp" />
     </LinearLayout>
 </FrameLayout>
