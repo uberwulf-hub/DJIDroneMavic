@@ -184,7 +184,7 @@ public class MissionsActivity extends Activity {
         for (Mission m : all) if (m.id.equals(showId)) show = m;
         for (Mission m : all) {
             TextView row = new TextView(this);
-            row.setText(m.name + "\n" + ("orbit".equals(m.kind) ? "Orbit" : "Roof sweep") + " · "
+            row.setText(m.name + "\n" + ("orbit".equals(m.kind) ? "Orbit" : "custom".equals(m.kind) ? "Custom path" : "Roof sweep") + " · "
                     + m.wps.size() + " points · " + Units.duration(m.estimatedSeconds()));
             row.setTextColor(Color.WHITE);
             row.setTextSize(15);

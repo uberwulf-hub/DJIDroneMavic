@@ -1,5 +1,5 @@
 // Minimal service worker so the planner can be installed as an app (Edge/Chrome "Install").
-const CACHE = 'airplan-v2';
+const CACHE = 'airplan-v4';
 const FILES = ['./', './index.html', './plan.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));

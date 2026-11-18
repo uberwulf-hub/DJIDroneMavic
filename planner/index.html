@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Air Pilot Planner</title>
-<meta name="description" content="Plan roof sweep and orbit missions for Air Pilot, then send them to the phone.">
+<meta name="description" content="Plan custom flight paths, roof sweeps and orbits for Air Pilot, then send them to the phone.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <meta name="theme-color" content="#242d34">
@@ -15,33 +15,35 @@
     --accent: #2f9a9a; --accent-2: #ffd54f; --warn: #ffb74d; --bad: #ff6b6b; --good: #8fe0a6;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
     font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  .app { display: grid; grid-template-columns: 360px 1fr; height: 100%; }
+  .app { display: grid; grid-template-columns: 380px 1fr; height: 100%; }
   aside { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 16px 18px 28px; }
   #map { height: 100%; }
   h1 { font-size: 20px; margin: 0 0 2px; }
-  .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
-  .tabs { display: flex; gap: 6px; margin: 8px 0 14px; }
-  .tabs button { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--line);
-    background: transparent; color: var(--text); font-weight: 600; cursor: pointer; font-size: 15px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .tabs { display: flex; gap: 6px; margin: 8px 0 12px; }
+  .tabs button { flex: 1; padding: 9px 6px; border-radius: 10px; border: 1px solid var(--line);
+    background: transparent; color: var(--text); font-weight: 600; cursor: pointer; font-size: 14px; }
   .tabs button.on { background: var(--accent); border-color: var(--accent); }
   .step { background: #1f272d; border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
   .step h2 { font-size: 13px; letter-spacing: .06em; color: var(--accent-2); margin: 0 0 8px; text-transform: uppercase; }
   .help { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
-  label.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0; }
+  label.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 7px 0; }
   label.row span { flex: 1; }
-  input[type=number], input[type=text], select { width: 110px; padding: 7px 8px; border-radius: 8px;
+  input[type=number], input[type=text], select { width: 120px; padding: 7px 8px; border-radius: 8px;
     border: 1px solid var(--line); background: #151b1f; color: var(--text); font: inherit; }
-  input[type=text].wide { width: 100%; }
   input[type=range] { width: 130px; accent-color: var(--accent); }
-  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-  button.b { padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line); background: transparent;
-    color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  button.b, label.b { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: transparent;
+    color: var(--text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
   button.b.primary { background: var(--accent); border-color: var(--accent); }
+  button.b.on { background: #3b2f12; border-color: var(--accent-2); color: var(--accent-2); }
+  button.b.danger { color: #ffb4a0; }
   button.b:disabled { opacity: .4; cursor: default; }
-  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 14px; }
-  .stats b { display: block; font-size: 18px; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px 12px; font-size: 13px; color: var(--muted); }
+  .stats b { display: block; font-size: 17px; color: var(--text); }
   .warn { color: var(--warn); font-size: 13px; margin: 6px 0 0; }
   .bad { color: var(--bad); font-size: 13px; margin: 6px 0 0; }
   .ok { color: var(--good); font-size: 13px; margin: 6px 0 0; }
@@ -52,16 +54,29 @@
   .sugg div { padding: 9px 10px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #222b31; }
   .sugg div:last-child { border-bottom: 0; }
   .sugg div:hover, .sugg div.on { background: var(--accent); }
+  .pt-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .pt-head b { flex: 1; font-size: 16px; }
+  .plist { list-style: none; padding: 0; margin: 8px 0 0; max-height: 210px; overflow-y: auto; }
+  .plist li { display: flex; gap: 8px; align-items: center; padding: 5px 8px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  .plist li:hover { background: #2a343b; }
+  .plist li.sel { background: var(--accent); }
+  .num { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: #4fc3f7; color: #0b1a22;
+    font-weight: 700; font-size: 12px; align-items: center; justify-content: center; flex: none; }
+  .pin { background: #4fc3f7; color: #0b1a22; border: 2px solid #fff; border-radius: 50%; width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center; font: 700 12px system-ui; box-shadow: 0 1px 4px #0008; }
+  .pin.sel { background: var(--accent-2); transform: scale(1.25); }
+  .pin.first { background: #ff6b6b; color: #fff; }
+  .tgt { font-size: 26px; line-height: 26px; text-align: center; filter: drop-shadow(0 1px 2px #000); }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 6px; }
   dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px;
     max-width: 440px; padding: 20px; }
   dialog::backdrop { background: rgba(0,0,0,.6); }
   #qr { background: #fff; padding: 12px; border-radius: 10px; display: inline-block; margin: 8px 0; }
   .lib li { margin: 4px 0; }
   .lib a { color: var(--accent-2); cursor: pointer; }
-  .legend { position: absolute; z-index: 500; right: 12px; bottom: 22px; background: rgba(27,34,39,.9);
-    border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 12px; color: var(--muted); }
-  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   .wrap { position: relative; }
+  .hint { position: absolute; z-index: 500; left: 50%; transform: translateX(-50%); top: 12px; background: rgba(27,34,39,.92);
+    border: 1px solid var(--line); border-radius: 10px; padding: 7px 12px; font-size: 13px; color: var(--text); pointer-events: none; }
   @media (max-width: 800px) {
     .app { grid-template-columns: 1fr; grid-template-rows: 55% 45%; }
     .wrap { order: -1; }
@@ -73,7 +88,7 @@
 <div class="app">
   <aside>
     <h1>Air Pilot Planner</h1>
-    <div class="sub">Plan a roof scan here, then send it to the phone.</div>
+    <div class="sub">Draw a flight on the map, then send it to the phone.</div>
 
     <div class="search">
       <input id="q" type="text" placeholder="Type an address, e.g. 123 Main St Tucson" autocomplete="off">
@@ -83,73 +98,141 @@
     </div>
 
     <div class="tabs">
-      <button id="tab-sweep" class="on">Roof face sweep</button>
+      <button id="tab-custom" class="on">Custom path</button>
+      <button id="tab-sweep">Roof sweep</button>
       <button id="tab-orbit">Orbit</button>
     </div>
 
-    <div class="step" id="draw-sweep">
-      <h2>1 · Trace the roof edge</h2>
-      <p class="help">Click the two ends of the roof's <b>lower edge</b> (the gutter line) on the face you want to scan.
-        The drone flies on the side with the yellow arrow.</p>
-      <div class="btns">
-        <button class="b" id="flip">⇄ Fly on the other side</button>
-        <button class="b" id="clear-sweep">Start over</button>
+    <!-- ===================== CUSTOM PATH ===================== -->
+    <div id="panel-custom">
+      <div class="step">
+        <h2>1 · Draw the path</h2>
+        <p class="help"><b>Click</b> the map to add a point · <b>drag</b> a point to move it · <b>click a point</b> to edit it ·
+          <b>click the yellow line</b> to insert a point.</p>
+        <div class="btns">
+          <button class="b" id="undo">↶ Undo</button>
+          <button class="b" id="reverse">⇄ Reverse</button>
+          <button class="b" id="target-btn">🎯 Camera target</button>
+          <button class="b danger" id="clear">Clear</button>
+        </div>
+        <details style="margin-top:8px">
+          <summary>New points start with…</summary>
+          <label class="row"><span>Height (ft)</span><input id="def-alt" type="number" value="50" min="7" max="400" step="5"></label>
+          <label class="row"><span>At each point</span>
+            <select id="def-action"><option value="photo">Take a photo</option><option value="none" selected>Just fly through</option></select></label>
+          <label class="row"><span>Facing</span>
+            <select id="def-face"><option value="next">Toward next point</option><option value="target">At the target</option></select></label>
+        </details>
+      </div>
+
+      <div class="step" id="editor" hidden>
+        <div class="pt-head">
+          <button class="b" id="prev">◀</button>
+          <b id="ed-title">Point 1</b>
+          <button class="b" id="next">▶</button>
+        </div>
+        <label class="row"><span>Height (ft)</span><input id="ed-alt" type="number" min="7" max="400" step="5"></label>
+        <label class="row"><span>Faces</span>
+          <select id="ed-face"><option value="next">Toward next point</option><option value="target">At the target 🎯</option><option value="fixed">Compass direction</option></select></label>
+        <label class="row" id="ed-heading-row" hidden><span>Direction (°, 0 = north)</span><input id="ed-heading" type="number" min="0" max="359" step="5"></label>
+        <label class="row"><span>Camera tilt</span>
+          <select id="ed-tiltmode"><option value="auto">Automatic</option><option value="manual">Set angle</option></select></label>
+        <label class="row" id="ed-tilt-row" hidden><span>Angle <span id="ed-tilt-v">-30°</span></span><input id="ed-tilt" type="range" min="-90" max="0" step="5" value="-30"></label>
+        <label class="row"><span>At this point</span>
+          <select id="ed-action">
+            <option value="none">Just fly through</option><option value="photo">Take a photo</option>
+            <option value="hover">Hover</option><option value="video_start">Start video</option><option value="video_stop">Stop video</option>
+          </select></label>
+        <label class="row" id="ed-hover-row" hidden><span>Hover for (seconds)</span><input id="ed-hover" type="number" min="1" max="60" value="5"></label>
+        <label class="row"><span>Speed to next point</span>
+          <select id="ed-speed"><option value="0">Same as mission</option><option value="1.5">Slow</option><option value="2.5">Normal</option><option value="5">Fast</option><option value="8">Very fast</option></select></label>
+        <div class="btns">
+          <button class="b" id="alt-all">Use this height for all</button>
+          <button class="b danger" id="del">Delete point</button>
+        </div>
+      </div>
+
+      <div class="step" id="list-step" hidden>
+        <h2>Points</h2>
+        <ul class="plist" id="plist"></ul>
       </div>
     </div>
 
-    <div class="step" id="draw-orbit" hidden>
-      <h2>1 · Outline the house</h2>
-      <p class="help">Click each corner of the house (or roof). Click the first corner again, or press <b>Done</b>.</p>
-      <div class="btns">
-        <button class="b" id="done-orbit">Done</button>
-        <button class="b" id="clear-orbit">Start over</button>
+    <!-- ===================== ROOF SWEEP ===================== -->
+    <div id="panel-sweep" hidden>
+      <div class="step">
+        <h2>1 · Trace the roof edge</h2>
+        <p class="help">Click the two ends of the roof's <b>lower edge</b> (gutter line). The drone flies side to side in rows,
+          stepping up, with the camera on the tiles.</p>
+        <div class="btns">
+          <button class="b" id="flip">⇄ Other side</button>
+          <button class="b" id="clear-sweep">Start over</button>
+          <button class="b" id="edit-sweep" disabled>✎ Edit as points</button>
+        </div>
+      </div>
+      <div class="step">
+        <h2>2 · Roof</h2>
+        <label class="row"><span>Gutter height (ft)</span><input id="eave" type="number" value="10" min="0" step="1"></label>
+        <label class="row"><span>Peak height (ft)</span><input id="ridge" type="number" value="18" min="0" step="1"></label>
+        <label class="row"><span>Distance from roof (ft)</span><input id="standoff" type="number" value="25" min="15" step="1"></label>
+        <details>
+          <summary>More settings</summary>
+          <label class="row"><span>Gutter to peak, flat distance (ft)</span><input id="depth" type="number" value="16" min="2" step="1"></label>
+          <label class="row"><span>Camera angle down (°)</span><input id="look" type="number" value="35" min="15" max="70" step="5"></label>
+          <label class="row"><span>Photo overlap</span><input id="overlap" type="range" min="40" max="80" value="65"><span id="overlapv" style="flex:0;width:40px">65%</span></label>
+        </details>
       </div>
     </div>
 
+    <!-- ===================== ORBIT ===================== -->
+    <div id="panel-orbit" hidden>
+      <div class="step">
+        <h2>1 · Outline the building</h2>
+        <p class="help">Click each corner, then click the first corner again (or <b>Done</b>). The drone circles it with the camera on it.</p>
+        <div class="btns">
+          <button class="b" id="done-orbit">Done</button>
+          <button class="b" id="clear-orbit">Start over</button>
+          <button class="b" id="edit-orbit" disabled>✎ Edit as points</button>
+        </div>
+      </div>
+      <div class="step">
+        <h2>2 · Building</h2>
+        <label class="row"><span>Top height (ft)</span><input id="oridge" type="number" value="18" min="0" step="1"></label>
+        <label class="row"><span>Distance from it (ft)</span><input id="ostandoff" type="number" value="25" min="15" step="1"></label>
+        <label class="row"><span>Loops</span>
+          <select id="rings"><option value="1">1 (quick)</option><option value="2" selected>2 (low + high)</option></select></label>
+        <label class="row"><span>Photos per loop</span>
+          <select id="per"><option>16</option><option selected>24</option><option>36</option></select></label>
+      </div>
+    </div>
+
+    <!-- ===================== SHARED ===================== -->
     <div class="step">
-      <h2>2 · Roof and flight</h2>
-      <label class="row"><span>Gutter height (ft)</span><input id="eave" type="number" value="10" min="0" step="1"></label>
-      <label class="row"><span>Peak height (ft)</span><input id="ridge" type="number" value="18" min="0" step="1"></label>
-      <label class="row sweep-only"><span>Gutter to peak, flat distance (ft)</span><input id="depth" type="number" value="16" min="2" step="1"></label>
-      <label class="row"><span>Distance from roof (ft)</span><input id="standoff" type="number" value="25" min="15" step="1"></label>
-      <label class="row sweep-only"><span>Camera angle down (°)</span><input id="look" type="number" value="35" min="15" max="70" step="5"></label>
-      <label class="row orbit-only" hidden><span>Loops</span>
-        <select id="rings"><option value="1">1 (quick)</option><option value="2" selected>2 (low + high)</option></select></label>
-      <label class="row orbit-only" hidden><span>Photos per loop</span>
-        <select id="per"><option>16</option><option selected>24</option><option>36</option></select></label>
-      <label class="row sweep-only"><span>Photo overlap</span><input id="overlap" type="range" min="40" max="80" value="65"><span id="overlapv" style="flex:0;width:40px">65%</span></label>
+      <h2>Flight</h2>
       <label class="row"><span>Speed</span>
         <select id="speed"><option value="1.5">Slow</option><option value="2.5" selected>Normal</option><option value="4">Fast</option></select></label>
       <label class="row"><span>When finished</span>
         <select id="finish"><option value="home" selected>Fly home</option><option value="hover">Hover there</option></select></label>
-      <p class="help">Heights are from where the drone takes off. Take off from the ground next to the house.
-        A single-story roof is about 10 ft at the gutter and 16–20 ft at the peak.</p>
-    </div>
-
-    <div class="step">
-      <h2>3 · Check the plan</h2>
-      <div id="stats" class="stats"><div class="help" style="grid-column:1/3">Draw on the map to see the flight.</div></div>
+      <p class="help">Heights are from where the drone takes off.</p>
+      <div id="stats" class="stats"></div>
       <div id="msgs"></div>
     </div>
 
     <div class="step">
-      <h2>4 · Send to the phone</h2>
-      <label class="row"><span>Name</span><input id="name" type="text" class="wide" placeholder="Front roof" style="width:180px"></label>
+      <h2>Send to the phone</h2>
+      <label class="row"><span>Name</span><input id="name" type="text" placeholder="Backyard reveal" style="width:190px"></label>
       <div class="btns">
         <button class="b primary" id="send" disabled>Send to phone (QR)</button>
-        <button class="b" id="download" disabled>Download plan file</button>
+        <button class="b" id="download" disabled>Download file</button>
         <button class="b" id="save" disabled>Save here</button>
-        <label class="b" style="display:inline-block">Open file…<input id="open" type="file" accept=".json,.airpilot" hidden></label>
+        <label class="b">Open file…<input id="open" type="file" accept=".json,.airpilot" hidden></label>
       </div>
-      <p class="help" style="margin-top:8px">For Google Drive: download the file, save it in Drive, then on the phone open
-        <b>Missions → Import</b> and pick it.</p>
       <ul class="lib" id="lib"></ul>
     </div>
   </aside>
   <div class="wrap">
     <div id="map"></div>
-    <div class="legend"><i style="background:#ffd54f"></i>Flight path ·
-      <i style="background:#4fc3f7"></i>Photo · <i style="background:#ff6b6b"></i>Start</div>
+    <div class="hint" id="hint"></div>
   </div>
 </div>
 
@@ -158,7 +241,7 @@
   <p class="help">Point the phone's camera at this code and tap the link. Air Pilot opens with the plan.</p>
   <div id="qr"></div>
   <p class="help">Or send yourself this link:</p>
-  <input id="link" type="text" class="wide" readonly>
+  <input id="link" type="text" readonly style="width:100%">
   <div class="btns"><button class="b" id="copy">Copy link</button><button class="b primary" id="close">Done</button></div>
 </dialog>
 
@@ -172,36 +255,55 @@
   var OPEN_URL = 'https://uberwulf-hub.github.io/DJIDroneMavic/m.html';
   var $ = function (id) { return document.getElementById(id); };
 
-  var map = L.map('map', { zoomControl: true }).setView([39.5, -98.35], 4);
+  // No double-click zoom: double clicks would drop points. Zoom with the wheel or the +/− buttons.
+  var map = L.map('map', { zoomControl: true, doubleClickZoom: false }).setView([39.5, -98.35], 4);
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     { maxZoom: 21, maxNativeZoom: 19, attribution: 'Imagery © Esri' }).addTo(map);
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
     { maxZoom: 21, maxNativeZoom: 19, opacity: 0.8 }).addTo(map);
 
-  var mode = 'sweep';
-  var edge = [];          // sweep: [A, B]
-  var side = 1;
-  var corners = [];       // orbit
-  var orbitClosed = false;
+  var mode = 'custom';
+  // custom path state
+  var pts = [];          // {lat,lng,alt(m),face,heading,tilt,action,hover,speed}
+  var target = null;     // {lat,lng}
+  var sel = -1;
+  var placingTarget = false;
+  var history = [];
+  // templates
+  var edge = [], side = 1, corners = [], orbitClosed = false;
   var plan = null;
   var draw = L.layerGroup().addTo(map), path = L.layerGroup().addTo(map);
 
-  // ---------- inputs
   function num(id) { var v = parseFloat($(id).value); return isNaN(v) ? 0 : v; }
-  function params() {
-    return {
-      name: $('name').value.trim() || undefined,
-      eave: num('eave') * FT, ridge: num('ridge') * FT, depth: num('depth') * FT,
-      standoff: num('standoff') * FT, lookDown: num('look'), overlap: num('overlap') / 100,
-      margin: 6 * FT, speed: parseFloat($('speed').value), finish: $('finish').value,
-      rings: parseInt($('rings').value, 10), perRing: parseInt($('per').value, 10), side: side
-    };
+  function snapshotPts() { history.push(JSON.stringify({ pts: pts, target: target })); if (history.length > 50) history.shift(); }
+
+  // ---------- modes
+  function setMode(m) {
+    mode = m;
+    ['custom', 'sweep', 'orbit'].forEach(function (k) {
+      $('tab-' + k).classList.toggle('on', k === m);
+      $('panel-' + k).hidden = k !== m;
+    });
+    placingTarget = false;
+    update();
   }
+  $('tab-custom').onclick = function () { setMode('custom'); };
+  $('tab-sweep').onclick = function () { setMode('sweep'); };
+  $('tab-orbit').onclick = function () { setMode('orbit'); };
 
   // ---------- map clicks
   map.on('click', function (e) {
     var p = { lat: e.latlng.lat, lng: e.latlng.lng };
-    if (mode === 'sweep') {
+    if (mode === 'custom') {
+      snapshotPts();
+      if (placingTarget) {
+        target = p;
+        placingTarget = false;
+      } else {
+        pts.push(newPoint(p));
+        sel = pts.length - 1;
+      }
+    } else if (mode === 'sweep') {
       if (edge.length >= 2) edge = [];
       edge.push(p);
     } else {
@@ -212,38 +314,150 @@
     update();
   });
 
-  function setMode(m) {
-    mode = m;
-    $('tab-sweep').classList.toggle('on', m === 'sweep');
-    $('tab-orbit').classList.toggle('on', m === 'orbit');
-    $('draw-sweep').hidden = m !== 'sweep';
-    $('draw-orbit').hidden = m !== 'orbit';
-    document.querySelectorAll('.sweep-only').forEach(function (el) { el.hidden = m !== 'sweep'; });
-    document.querySelectorAll('.orbit-only').forEach(function (el) { el.hidden = m !== 'orbit'; });
-    update();
+  function newPoint(p) {
+    var face = $('def-face').value === 'target' && target ? 'target' : 'next';
+    return { lat: p.lat, lng: p.lng, alt: num('def-alt') * FT, face: face, heading: 0, tilt: 'auto',
+      action: $('def-action').value, hover: 5, speed: 0 };
   }
-  $('tab-sweep').onclick = function () { setMode('sweep'); };
-  $('tab-orbit').onclick = function () { setMode('orbit'); };
-  $('flip').onclick = function () { side = -side; update(); };
-  $('clear-sweep').onclick = function () { edge = []; update(); };
-  $('clear-orbit').onclick = function () { corners = []; orbitClosed = false; update(); };
-  $('done-orbit').onclick = function () { if (corners.length >= 3) { orbitClosed = true; update(); } };
-  ['eave', 'ridge', 'depth', 'standoff', 'look', 'overlap', 'speed', 'finish', 'rings', 'per', 'name']
-    .forEach(function (id) { $(id).addEventListener('input', update); });
-  $('overlap').addEventListener('input', function () { $('overlapv').textContent = $('overlap').value + '%'; });
 
-  // ---------- drawing + generation
-  function update() {
+  // ---------- custom toolbar
+  $('undo').onclick = function () {
+    var h = history.pop(); if (!h) return;
+    var o = JSON.parse(h); pts = o.pts; target = o.target; sel = Math.min(sel, pts.length - 1); update();
+  };
+  $('reverse').onclick = function () { if (pts.length < 2) return; snapshotPts(); pts.reverse(); sel = -1; update(); };
+  $('clear').onclick = function () {
+    if (!pts.length && !target) return;
+    if (!confirm('Remove all points?')) return;
+    snapshotPts(); pts = []; target = null; sel = -1; update();
+  };
+  $('target-btn').onclick = function () {
+    if (target) { snapshotPts(); target = null; pts.forEach(function (q) { if (q.face === 'target') q.face = 'next'; }); update(); return; }
+    placingTarget = !placingTarget; update();
+  };
+
+  // ---------- point editor
+  function edit(fn) { if (sel < 0 || !pts[sel]) return; snapshotPts(); fn(pts[sel]); update(true); }
+  $('ed-alt').addEventListener('change', function () { edit(function (q) { q.alt = Math.max(7, num('ed-alt')) * FT; }); });
+  $('ed-face').addEventListener('change', function () {
+    if ($('ed-face').value === 'target' && !target) { alert('Place a camera target first (🎯 button, then click the map).'); $('ed-face').value = pts[sel].face; return; }
+    edit(function (q) { q.face = $('ed-face').value; });
+  });
+  $('ed-heading').addEventListener('change', function () { edit(function (q) { q.heading = ((num('ed-heading') % 360) + 360) % 360; }); });
+  $('ed-tiltmode').addEventListener('change', function () { edit(function (q) { q.tilt = $('ed-tiltmode').value === 'auto' ? 'auto' : num('ed-tilt'); }); });
+  $('ed-tilt').addEventListener('input', function () { $('ed-tilt-v').textContent = $('ed-tilt').value + '°'; });
+  $('ed-tilt').addEventListener('change', function () { edit(function (q) { q.tilt = num('ed-tilt'); }); });
+  $('ed-action').addEventListener('change', function () { edit(function (q) { q.action = $('ed-action').value; }); });
+  $('ed-hover').addEventListener('change', function () { edit(function (q) { q.hover = Math.max(1, Math.min(60, num('ed-hover'))); }); });
+  $('ed-speed').addEventListener('change', function () { edit(function (q) { q.speed = parseFloat($('ed-speed').value); }); });
+  $('alt-all').onclick = function () { if (sel < 0) return; snapshotPts(); var a = pts[sel].alt; pts.forEach(function (q) { q.alt = a; }); update(true); };
+  $('del').onclick = function () { if (sel < 0) return; snapshotPts(); pts.splice(sel, 1); sel = Math.min(sel, pts.length - 1); update(); };
+  $('prev').onclick = function () { if (pts.length) { sel = (sel - 1 + pts.length) % pts.length; update(true); } };
+  $('next').onclick = function () { if (pts.length) { sel = (sel + 1) % pts.length; update(true); } };
+
+  function fillEditor() {
+    $('editor').hidden = sel < 0 || !pts[sel];
+    $('list-step').hidden = pts.length === 0;
+    if (sel < 0 || !pts[sel]) return;
+    var q = pts[sel];
+    $('ed-title').textContent = 'Point ' + (sel + 1) + ' of ' + pts.length;
+    $('ed-alt').value = Math.round(q.alt / FT);
+    $('ed-face').value = q.face || 'next';
+    $('ed-heading-row').hidden = q.face !== 'fixed';
+    $('ed-heading').value = Math.round(q.heading || 0);
+    $('ed-tiltmode').value = q.tilt === 'auto' ? 'auto' : 'manual';
+    $('ed-tilt-row').hidden = q.tilt === 'auto';
+    if (q.tilt !== 'auto') { $('ed-tilt').value = q.tilt; $('ed-tilt-v').textContent = q.tilt + '°'; }
+    $('ed-action').value = q.action || 'none';
+    $('ed-hover-row').hidden = q.action !== 'hover';
+    $('ed-hover').value = q.hover || 5;
+    $('ed-speed').value = String(q.speed || 0);
+  }
+
+  var ACTION_ICON = { none: '', photo: '📷', hover: '⏸', video_start: '⏺', video_stop: '⏹' };
+  function fillList() {
+    var ul = $('plist'); ul.innerHTML = '';
+    pts.forEach(function (q, i) {
+      var li = document.createElement('li');
+      if (i === sel) li.className = 'sel';
+      li.innerHTML = '<span class="num">' + (i + 1) + '</span><span style="flex:1">' + Math.round(q.alt / FT) + ' ft' +
+        (q.face === 'target' ? ' · 🎯' : q.face === 'fixed' ? ' · ' + Math.round(q.heading) + '°' : '') + '</span><span>' +
+        (ACTION_ICON[q.action] || '') + (q.action === 'hover' ? ' ' + q.hover + 's' : '') + '</span>';
+      li.onclick = function () { sel = i; update(true); map.panTo([q.lat, q.lng]); };
+      ul.appendChild(li);
+    });
+  }
+
+  // ---------- drawing
+  function pinIcon(i) {
+    return L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13],
+      html: '<div class="pin' + (i === sel ? ' sel' : '') + (i === 0 ? ' first' : '') + '">' + (i + 1) + '</div>' });
+  }
+
+  function drawCustom() {
+    if (target) {
+      var tm = L.marker([target.lat, target.lng], { draggable: true,
+        icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: '<div class="tgt">🎯</div>' }) }).addTo(draw);
+      tm.on('dragstart', snapshotPts);
+      tm.on('dragend', function (e) { var ll = e.target.getLatLng(); target = { lat: ll.lat, lng: ll.lng }; update(true); });
+    }
+    if (pts.length > 1) {
+      var line = L.polyline(pts.map(function (q) { return [q.lat, q.lng]; }), { color: '#ffd54f', weight: 5, opacity: .9 }).addTo(draw);
+      line.on('click', function (e) {
+        L.DomEvent.stop(e);
+        if (placingTarget) { snapshotPts(); target = { lat: e.latlng.lat, lng: e.latlng.lng }; placingTarget = false; update(true); return; }
+        // insert after the nearest segment
+        var best = 0, bd = Infinity, P = map.latLngToLayerPoint(e.latlng);
+        for (var i = 0; i < pts.length - 1; i++) {
+          var a = map.latLngToLayerPoint([pts[i].lat, pts[i].lng]), b = map.latLngToLayerPoint([pts[i + 1].lat, pts[i + 1].lng]);
+          var d = L.LineUtil.pointToSegmentDistance(P, a, b);
+          if (d < bd) { bd = d; best = i; }
+        }
+        snapshotPts();
+        var a0 = pts[best], b0 = pts[best + 1];
+        var np = newPoint(e.latlng);
+        np.alt = (a0.alt + b0.alt) / 2;
+        pts.splice(best + 1, 0, np);
+        sel = best + 1;
+        update();
+      });
+    }
+    pts.forEach(function (q, i) {
+      var m = L.marker([q.lat, q.lng], { draggable: true, icon: pinIcon(i), zIndexOffset: i === sel ? 1000 : 0 }).addTo(draw);
+      m.bindTooltip('#' + (i + 1) + ' · ' + Math.round(q.alt / FT) + ' ft' + (q.action !== 'none' ? ' · ' + q.action.replace('_', ' ') : ''));
+      m.on('click', function (e) {
+        L.DomEvent.stop(e);
+        if (placingTarget) { snapshotPts(); target = { lat: q.lat, lng: q.lng }; placingTarget = false; update(true); return; }
+        sel = i; update(true);
+      });
+      m.on('dragstart', snapshotPts);
+      m.on('dragend', function (e) { var ll = e.target.getLatLng(); q.lat = ll.lat; q.lng = ll.lng; sel = i; update(); });
+    });
+  }
+
+  function update(keepView) {
     draw.clearLayers();
     path.clearLayers();
     plan = null;
     var msgs = [];
-    if (mode === 'sweep') {
+    var common = { name: $('name').value.trim() || undefined, speed: parseFloat($('speed').value), finish: $('finish').value };
+    if (mode === 'custom') {
+      drawCustom();
+      fillEditor();
+      fillList();
+      $('target-btn').textContent = target ? '🎯 Remove target' : (placingTarget ? '🎯 Click the map…' : '🎯 Camera target');
+      $('target-btn').classList.toggle('on', placingTarget);
+      if (pts.length >= 2) plan = AirPlan.custom(Object.assign(common, { points: pts, target: target }));
+      hint(placingTarget ? 'Click where the camera should keep looking' : pts.length ? '' : 'Click the map to add your first point');
+    } else if (mode === 'sweep') {
       edge.forEach(function (p) { L.circleMarker(p, { radius: 6, color: '#fff', fillColor: '#ff6b6b', fillOpacity: 1 }).addTo(draw); });
       if (edge.length === 2) {
         L.polyline(edge, { color: '#ff6b6b', weight: 4 }).addTo(draw);
-        plan = AirPlan.sweep(Object.assign(params(), { a: edge[0], b: edge[1] }));
+        plan = AirPlan.sweep(Object.assign(common, {
+          a: edge[0], b: edge[1], side: side, eave: num('eave') * FT, ridge: num('ridge') * FT, depth: num('depth') * FT,
+          standoff: num('standoff') * FT, lookDown: num('look'), overlap: num('overlap') / 100, margin: 6 * FT }));
       }
+      hint(edge.length < 2 ? 'Click the two ends of the roof edge' : '');
     } else {
       if (corners.length) {
         L.polyline(orbitClosed ? corners.concat([corners[0]]) : corners, { color: '#ff6b6b', weight: 3 }).addTo(draw);
@@ -251,36 +465,59 @@
           L.circleMarker(p, { radius: i === 0 ? 7 : 5, color: '#fff', fillColor: '#ff6b6b', fillOpacity: 1 }).addTo(draw);
         });
       }
-      if (orbitClosed) plan = AirPlan.orbit(Object.assign(params(), { house: corners }));
+      if (orbitClosed) plan = AirPlan.orbit(Object.assign(common, {
+        house: corners, eave: num('oridge') * FT * 0.6, ridge: num('oridge') * FT, standoff: num('ostandoff') * FT,
+        rings: parseInt($('rings').value, 10), perRing: parseInt($('per').value, 10) }));
+      hint(orbitClosed ? '' : 'Click the corners, then click the first one again');
     }
     if (plan && plan.error) { msgs.push('<p class="bad">' + plan.error + '</p>'); plan = null; }
-    if (plan) drawPlan(plan);
+    if (plan && mode !== 'custom') drawGenerated(plan);
+    if (plan && mode === 'custom') drawAim(plan);
     renderStats(plan, msgs);
     ['send', 'download', 'save'].forEach(function (id) { $(id).disabled = !plan; });
+    $('edit-sweep').disabled = !(plan && mode === 'sweep');
+    $('edit-orbit').disabled = !(plan && mode === 'orbit');
   }
 
-  function drawPlan(pl) {
+  function hint(t) { $('hint').textContent = t; $('hint').style.display = t ? 'block' : 'none'; }
+
+  function drawAim(pl) {
+    pl._preview.wps.forEach(function (q) {
+      L.polyline([[q.lat, q.lng], [q.aim.lat, q.aim.lng]], { color: '#4fc3f7', weight: 1.5, opacity: .5, dashArray: '3 4', interactive: false }).addTo(path);
+    });
+  }
+
+  function drawGenerated(pl) {
     var w = pl._preview.wps;
     L.polyline(w.map(function (q) { return [q.lat, q.lng]; }), { color: '#ffd54f', weight: 3, opacity: .9 }).addTo(path);
     w.forEach(function (q, i) {
       L.polyline([[q.lat, q.lng], [q.aim.lat, q.aim.lng]], { color: '#4fc3f7', weight: 1, opacity: .35, dashArray: '3 4' }).addTo(path);
       L.circleMarker([q.lat, q.lng], { radius: i === 0 ? 7 : 4, color: i === 0 ? '#fff' : '#4fc3f7',
         fillColor: i === 0 ? '#ff6b6b' : '#4fc3f7', fillOpacity: 1, weight: i === 0 ? 2 : 1 })
-        .bindTooltip('#' + (i + 1) + ' · ' + Math.round(q.alt / FT) + ' ft up · camera ' + q.pitch + '°').addTo(path);
+        .bindTooltip('#' + (i + 1) + ' · ' + Math.round(q.alt / FT) + ' ft · camera ' + q.pitch + '°').addTo(path);
     });
-    if (mode === 'sweep') {
-      // arrow showing the side the drone is on
-      var a = pl._preview.wps[0];
-      L.circleMarker([a.lat, a.lng], { radius: 10, color: '#ffd54f', fill: false, weight: 2 }).addTo(path);
-    }
   }
 
-  function fmtTime(s) { var m = Math.floor(s / 60); return m + ':' + ('0' + (s % 60)).slice(-2); }
+  /** Turn a roof sweep / orbit into editable custom points. */
+  function toCustom() {
+    if (!plan) return;
+    var w = plan._preview.wps;
+    snapshotPts();
+    pts = w.map(function (q) {
+      return { lat: q.lat, lng: q.lng, alt: q.alt, face: 'fixed', heading: (q.heading + 360) % 360, tilt: q.pitch,
+        action: q.photo ? 'photo' : 'none', hover: 5, speed: 0 };
+    });
+    target = null; sel = 0;
+    if (!$('name').value.trim()) $('name').value = plan.name;
+    setMode('custom');
+  }
+  $('edit-sweep').onclick = toCustom;
+  $('edit-orbit').onclick = toCustom;
 
+  function fmtTime(s) { var m = Math.floor(s / 60); return m + ':' + ('0' + (s % 60)).slice(-2); }
   function renderStats(pl, msgs) {
     if (!pl) {
-      $('stats').innerHTML = '<div class="help" style="grid-column:1/3">' +
-        (mode === 'sweep' ? 'Click the two ends of the roof edge.' : 'Click the house corners, then Done.') + '</div>';
+      $('stats').innerHTML = '';
       $('msgs').innerHTML = msgs.join('');
       return;
     }
@@ -288,14 +525,23 @@
     $('stats').innerHTML =
       '<div>Points<b>' + pl.wp.length + '</b></div>' +
       '<div>Photos<b>' + p.photos + '</b></div>' +
-      '<div>Flight time<b>' + fmtTime(p.seconds) + '</b></div>' +
+      '<div>Time<b>' + fmtTime(p.seconds) + '</b></div>' +
       '<div>Battery<b>~' + p.battery + '%</b></div>' +
       '<div>Path<b>' + Math.round(p.distance / FT) + ' ft</b></div>' +
       '<div>Highest<b>' + Math.round(p.maxAlt / FT) + ' ft</b></div>';
     p.warnings.forEach(function (w) { msgs.push('<p class="warn">⚠ ' + w + '</p>'); });
-    if (!p.warnings.length) msgs.push('<p class="ok">✔ Looks good. Check for trees and wires along the yellow path.</p>');
+    if (!p.warnings.length) msgs.push('<p class="ok">✔ Looks good. Check for trees and wires along the path.</p>');
     $('msgs').innerHTML = msgs.join('');
   }
+
+  // template inputs
+  $('flip').onclick = function () { side = -side; update(); };
+  $('clear-sweep').onclick = function () { edge = []; update(); };
+  $('clear-orbit').onclick = function () { corners = []; orbitClosed = false; update(); };
+  $('done-orbit').onclick = function () { if (corners.length >= 3) { orbitClosed = true; update(); } };
+  ['eave', 'ridge', 'depth', 'standoff', 'look', 'overlap', 'oridge', 'ostandoff', 'rings', 'per', 'speed', 'finish', 'name']
+    .forEach(function (id) { $(id).addEventListener('input', function () { update(true); }); });
+  $('overlap').addEventListener('input', function () { $('overlapv').textContent = $('overlap').value + '%'; });
 
   // ---------- transfer
   function b64url(bytes) {
@@ -305,8 +551,7 @@
   async function encode(pl) {
     var json = JSON.stringify(AirPlan.toTransfer(pl));
     var stream = new Blob([json]).stream().pipeThrough(new CompressionStream('deflate-raw'));
-    var buf = new Uint8Array(await new Response(stream).arrayBuffer());
-    return b64url(buf);
+    return b64url(new Uint8Array(await new Response(stream).arrayBuffer()));
   }
   $('send').onclick = async function () {
     if (!plan) return;
@@ -318,64 +563,68 @@
   };
   $('close').onclick = function () { $('dlg').close(); };
   $('copy').onclick = function () { $('link').select(); navigator.clipboard.writeText($('link').value); };
-
   function fileName(pl) { return (pl.name || 'mission').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '_') + '.airpilot.json'; }
   $('download').onclick = function () {
     if (!plan) return;
     var blob = new Blob([JSON.stringify(AirPlan.toTransfer(plan), null, 1)], { type: 'application/json' });
     var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = fileName(plan);
-    a.click();
+    a.href = URL.createObjectURL(blob); a.download = fileName(plan); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
   };
 
-  // ---------- library (this browser) and opening files
+  // ---------- saved plans (this browser) and opening files
+  var INPUTS = ['eave', 'ridge', 'depth', 'standoff', 'look', 'overlap', 'oridge', 'ostandoff', 'rings', 'per', 'speed', 'finish', 'def-alt', 'def-action', 'def-face'];
   function lib() { try { return JSON.parse(localStorage.getItem('airplan-lib') || '[]'); } catch (e) { return []; } }
   function setLib(l) { try { localStorage.setItem('airplan-lib', JSON.stringify(l)); } catch (e) {} renderLib(); }
   function snapshot() {
-    return { name: $('name').value.trim() || (mode === 'sweep' ? 'Roof sweep' : 'Roof orbit'), mode: mode, edge: edge, side: side,
-      corners: corners, closed: orbitClosed, inputs: ['eave', 'ridge', 'depth', 'standoff', 'look', 'overlap', 'speed', 'finish', 'rings', 'per']
-        .reduce(function (o, id) { o[id] = $(id).value; return o; }, {}), saved: Date.now() };
+    return { name: $('name').value.trim() || (plan && plan.name) || 'Plan', mode: mode, pts: pts, target: target,
+      edge: edge, side: side, corners: corners, closed: orbitClosed,
+      inputs: INPUTS.reduce(function (o, id) { o[id] = $(id).value; return o; }, {}), saved: Date.now() };
   }
   function restore(s) {
-    edge = s.edge || []; side = s.side || 1; corners = s.corners || []; orbitClosed = !!s.closed;
+    pts = s.pts || []; target = s.target || null; edge = s.edge || []; side = s.side || 1;
+    corners = s.corners || []; orbitClosed = !!s.closed; sel = -1; history = [];
     Object.keys(s.inputs || {}).forEach(function (id) { if ($(id)) $(id).value = s.inputs[id]; });
     $('name').value = s.name || ''; $('overlapv').textContent = $('overlap').value + '%';
-    setMode(s.mode || 'sweep');
-    var pts = (s.mode === 'orbit' ? corners : edge);
-    if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(1.5));
+    setMode(s.mode || 'custom');
+    var all = (s.mode === 'orbit' ? corners : s.mode === 'sweep' ? edge : pts).map(function (q) { return [q.lat, q.lng]; });
+    if (all.length) map.fitBounds(L.latLngBounds(all).pad(0.6));
   }
   $('save').onclick = function () {
     var s = snapshot(), l = lib().filter(function (x) { return x.name !== s.name; });
-    l.unshift(s); setLib(l.slice(0, 30));
+    l.unshift(s); setLib(l.slice(0, 40));
   };
   function renderLib() {
     var l = lib();
     $('lib').innerHTML = l.length ? '<li class="help">Saved in this browser:</li>' : '';
     l.forEach(function (s, i) {
       var li = document.createElement('li');
-      li.innerHTML = '<a>' + s.name.replace(/</g, '&lt;') + '</a> <span class="help">' + new Date(s.saved).toLocaleDateString() + '</span> ' +
-        '<a style="color:var(--muted)" title="Delete">✕</a>';
+      li.innerHTML = '<a>' + String(s.name).replace(/</g, '&lt;') + '</a> <span class="help">' + new Date(s.saved).toLocaleDateString() +
+        '</span> <a style="color:var(--muted)" title="Delete">✕</a>';
       li.children[0].onclick = function () { restore(s); };
       li.children[2].onclick = function () { var x = lib(); x.splice(i, 1); setLib(x); };
       $('lib').appendChild(li);
     });
   }
+  /** Opening a plan file makes it editable as a custom path. */
   $('open').onchange = function (e) {
     var f = e.target.files[0]; if (!f) return;
     f.text().then(function (t) {
       var m = JSON.parse(t);
       if (m.app !== 'airpilot-mission') throw new Error('Not an Air Pilot plan');
-      // show the stored path read-only
-      draw.clearLayers(); path.clearLayers();
-      var pts = m.wp.map(function (w) { return [w[0], w[1]]; });
-      L.polyline(pts, { color: '#ffd54f', weight: 3 }).addTo(path);
-      pts.forEach(function (p) { L.circleMarker(p, { radius: 4, color: '#4fc3f7', fillOpacity: 1 }).addTo(path); });
-      map.fitBounds(L.latLngBounds(pts).pad(0.5));
-      $('stats').innerHTML = '<div class="help" style="grid-column:1/3">Opened "' + m.name + '" (' + m.wp.length +
-        ' points). To change it, draw it again.</div>';
+      snapshotPts();
+      pts = m.wp.map(function (w) {
+        var x = w[6] || {};
+        var action = x.rec === 'start' ? 'video_start' : x.rec === 'stop' ? 'video_stop' : x.stay ? 'hover' : w[5] ? 'photo' : 'none';
+        return { lat: w[0], lng: w[1], alt: w[2], face: 'fixed', heading: (w[3] + 360) % 360, tilt: w[4], action: action,
+          hover: x.stay || 5, speed: x.speed || 0 };
+      });
+      target = null; sel = 0;
+      $('name').value = m.name || '';
+      setMode('custom');
+      map.fitBounds(L.latLngBounds(pts.map(function (q) { return [q.lat, q.lng]; })).pad(0.5));
     }).catch(function (err) { alert('Could not open that file: ' + err.message); });
+    e.target.value = '';
   };
 
   // ---------- search / locate
@@ -453,8 +702,15 @@
       function () { alert('Location not available'); });
   };
 
+
+  document.addEventListener('keydown', function (e) {
+    if (mode !== 'custom' || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    if ((e.key === 'Delete' || e.key === 'Backspace') && sel >= 0) { $('del').click(); e.preventDefault(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { $('undo').click(); e.preventDefault(); }
+  });
+
   renderLib();
-  setMode('sweep');
+  setMode('custom');
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
 })();
 </script>

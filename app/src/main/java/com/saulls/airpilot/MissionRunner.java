@@ -124,12 +124,24 @@ public final class MissionRunner implements WaypointMissionOperatorListener {
             Waypoint wp = new Waypoint(w.lat, w.lng, (float) w.alt);
             wp.heading = Math.max(-180, Math.min(180, w.heading));
             wp.gimbalPitch = Math.max(-90, Math.min(0, w.pitch));
+            if (w.speed > 0) wp.speed = (float) Math.max(1, Math.min(15, w.speed));
             wp.addAction(new WaypointAction(WaypointActionType.ROTATE_AIRCRAFT, wp.heading));
             wp.addAction(new WaypointAction(WaypointActionType.GIMBAL_PITCH, (int) wp.gimbalPitch));
+            if ("start".equals(w.record)) wp.addAction(new WaypointAction(WaypointActionType.START_RECORD, 0));
+            if (w.hoverS > 0) {
+                // STAY takes milliseconds up to ~32 s; split longer hovers.
+                int ms = (int) Math.round(w.hoverS * 1000);
+                while (ms > 0 && wp.waypointActions.size() < 14) {
+                    int chunk = Math.min(ms, 30000);
+                    wp.addAction(new WaypointAction(WaypointActionType.STAY, chunk));
+                    ms -= chunk;
+                }
+            }
             if (w.photo) {
                 wp.addAction(new WaypointAction(WaypointActionType.STAY, 800)); // settle for a sharp photo
                 wp.addAction(new WaypointAction(WaypointActionType.START_TAKE_PHOTO, 0));
             }
+            if ("stop".equals(w.record)) wp.addAction(new WaypointAction(WaypointActionType.STOP_RECORD, 0));
             b.addWaypoint(wp);
         }
         b.waypointCount(m.wps.size());
@@ -158,7 +170,11 @@ public final class MissionRunner implements WaypointMissionOperatorListener {
         Runnable upload = () -> op.uploadMission(err -> {
             if (err != null) end("Upload failed: " + err.getDescription(), false);
         });
-        if (cam != null) {
+        boolean video = false;
+        for (Mission.Wp w : m.wps) if ("start".equals(w.record)) video = true;
+        if (cam != null && video && m.photos() == 0) {
+            cam.setMode(SettingsDefinitions.CameraMode.RECORD_VIDEO, e1 -> upload.run());
+        } else if (cam != null) {
             cam.setMode(SettingsDefinitions.CameraMode.SHOOT_PHOTO,
                     e1 -> cam.setShootPhotoMode(SettingsDefinitions.ShootPhotoMode.SINGLE, e2 -> upload.run()));
         } else {

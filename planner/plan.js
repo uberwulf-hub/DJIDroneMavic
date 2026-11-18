@@ -147,6 +147,63 @@
       { rings: rings, radius: round(radius, 1), eave: eave, ridge: ridge });
   }
 
+  /**
+   * Custom path: the pilot's own points.
+   * p: { points:[{lat,lng,alt(m), face:'next'|'target'|'fixed', heading, tilt:'auto'|number(deg, -90..0),
+   *               action:'photo'|'none'|'video_start'|'video_stop'|'hover', hover(s), speed(m/s or 0)}],
+   *      target:{lat,lng,alt} | null, speed, finish }
+   */
+  function custom(p) {
+    var warnings = [];
+    var pts = p.points || [];
+    if (pts.length < 2) return { error: 'Click the map to add at least 2 points.' };
+    var o = pts[0];
+    var tgt = p.target && p.target.lat != null ? p.target : null;
+    var tl = tgt ? toLocal(o, tgt) : null;
+    var tAlt = tgt ? (tgt.alt || 0) : 0;
+    var recording = false, sawPhoto = false, sawVideo = false;
+    var wps = pts.map(function (q, i) {
+      var L = toLocal(o, q);
+      var alt = clamp(q.alt == null ? 15 : q.alt, 2, MAX_ALT);
+      var heading;
+      if (q.face === 'fixed') heading = q.heading || 0;
+      else if (q.face === 'target' && tl) heading = bearingDeg(tl.x - L.x, tl.y - L.y);
+      else {
+        var nb = pts[i + 1] || null, pv = pts[i - 1] || null;
+        var other = nb ? toLocal(o, nb) : (pv ? toLocal(o, pv) : { x: L.x, y: L.y + 1 });
+        heading = nb ? bearingDeg(other.x - L.x, other.y - L.y) : bearingDeg(L.x - other.x, L.y - other.y);
+      }
+      var pitch;
+      if (q.tilt === 'auto' || q.tilt == null) {
+        if (tl && q.face === 'target') {
+          var hd = Math.max(1, Math.hypot(tl.x - L.x, tl.y - L.y));
+          pitch = -Math.atan2(alt - tAlt, hd) * 180 / Math.PI;
+        } else pitch = -30;
+      } else pitch = q.tilt;
+      var act = q.action || 'none';
+      var extra = {};
+      if (act === 'hover') extra.stay = clamp(q.hover || 3, 1, 60);
+      if (act === 'video_start') { extra.rec = 'start'; recording = true; sawVideo = true; }
+      if (act === 'video_stop') { extra.rec = 'stop'; recording = false; }
+      if (act === 'photo') sawPhoto = true;
+      if (q.speed) extra.speed = clamp(q.speed, 1, 15);
+      return { lat: q.lat, lng: q.lng, alt: round(alt, 1), heading: round(heading, 0),
+        pitch: round(clamp(pitch, -90, 0), 0), photo: act === 'photo', extra: extra, row: 0,
+        aim: tgt && q.face === 'target' ? tgt : toGeo(o, { x: L.x + Math.sin(heading * Math.PI / 180) * 8, y: L.y + Math.cos(heading * Math.PI / 180) * 8 }) };
+    });
+    if (recording) {
+      wps[wps.length - 1].extra.rec = 'stop';
+      warnings.push('Video was still recording at the last point, so it stops there.');
+    }
+    if (sawPhoto && sawVideo) warnings.push('Photos taken while video is recording may be skipped by the drone. Keep photo and video parts separate.');
+    for (var i = 1; i < wps.length; i++) {
+      var a = wps[i - 1], b = wps[i];
+      var dx = (b.lng - a.lng) * Math.cos(a.lat * Math.PI / 180) * R_LNG, dy = (b.lat - a.lat) * R_LAT;
+      if (Math.hypot(dx, dy) < 0.6 && Math.abs(b.alt - a.alt) < 0.6) { warnings.push('Points ' + i + ' and ' + (i + 1) + ' are on top of each other.'); break; }
+    }
+    return finish(p, 'custom', wps, tgt || { lat: pts[0].lat, lng: pts[0].lng }, [], warnings, { eave: 0, ridge: 0 });
+  }
+
   function finish(p, kind, wps, target, house, warnings, extra) {
     if (wps.length > MAX_WAYPOINTS) {
       return { error: 'That needs ' + wps.length + ' points (the drone allows 99). Lower the overlap or shorten the edge.' };
@@ -159,21 +216,24 @@
       dist += Math.sqrt(dx * dx + dy * dy + (b.alt - a.alt) * (b.alt - a.alt));
     }
     var photos = wps.filter(function (w) { return w.photo; }).length;
-    var seconds = Math.round(dist / speed + photos * 3 + wps.length * 1.5 + 60);
+    var hover = wps.reduce(function (t, w) { return t + ((w.extra && w.extra.stay) || 0); }, 0);
+    var seconds = Math.round(dist / speed + photos * 3 + hover + wps.length * 1.5 + 60);
     var battery = Math.ceil(seconds * 0.09 * 1.2);
     if (battery > 60) warnings.push('Uses about ' + battery + '% battery. Start with a full battery or split it into two missions.');
     var maxAlt = 0;
     wps.forEach(function (w) { maxAlt = Math.max(maxAlt, w.alt); });
     return {
       app: 'airpilot-mission', v: 1,
-      name: p.name || (kind === 'sweep' ? 'Roof sweep' : 'Roof orbit'),
+      name: p.name || (kind === 'sweep' ? 'Roof sweep' : kind === 'orbit' ? 'Roof orbit' : 'Custom path'),
       kind: kind, created: new Date().toISOString(),
       speed: speed, finish: p.finish === 'hover' ? 'hover' : 'home',
       target: { lat: target.lat, lng: target.lng },
       house: house.map(function (q) { return [round(q.lat, 7), round(q.lng, 7)]; }),
       roof: { eave: extra.eave, ridge: extra.ridge },
       wp: wps.map(function (w) {
-        return [round(w.lat, 7), round(w.lng, 7), w.alt, w.heading, w.pitch, w.photo ? 1 : 0];
+        var a = [round(w.lat, 7), round(w.lng, 7), w.alt, w.heading, w.pitch, w.photo ? 1 : 0];
+        if (w.extra && Object.keys(w.extra).length) a.push(w.extra);
+        return a;
       }),
       // preview-only details (not needed by the phone)
       _preview: { wps: wps, distance: Math.round(dist), seconds: seconds, battery: battery,
@@ -188,7 +248,7 @@
     return out;
   }
 
-  var api = { sweep: sweep, orbit: orbit, toTransfer: toTransfer, MIN_STANDOFF: MIN_STANDOFF };
+  var api = { sweep: sweep, orbit: orbit, custom: custom, toTransfer: toTransfer, MIN_STANDOFF: MIN_STANDOFF };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AirPlan = api;
 })(this);

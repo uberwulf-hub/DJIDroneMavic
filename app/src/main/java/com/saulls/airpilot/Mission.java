@@ -26,6 +26,12 @@ public final class Mission {
         public double lat, lng, alt;
         public int heading, pitch;
         public boolean photo;
+        /** Seconds to hover here (0 = none). */
+        public double hoverS;
+        /** "start" / "stop" video recording here, or null. */
+        public String record;
+        /** Speed to the next point in m/s (0 = mission speed). */
+        public double speed;
     }
 
     public String id;
@@ -77,6 +83,12 @@ public final class Mission {
             w.heading = (int) Math.round(a.getDouble(3));
             w.pitch = (int) Math.round(a.getDouble(4));
             w.photo = a.optInt(5, 1) == 1;
+            JSONObject x = a.optJSONObject(6);
+            if (x != null) {
+                w.hoverS = x.optDouble("stay", 0);
+                w.record = x.has("rec") ? x.optString("rec") : null;
+                w.speed = x.optDouble("speed", 0);
+            }
             m.wps.add(w);
         }
         m.id = Integer.toHexString(json.hashCode());
@@ -122,7 +134,9 @@ public final class Mission {
     }
 
     public int estimatedSeconds() {
-        return (int) Math.round(distanceM() / Math.max(1, speed) + photos() * 3 + wps.size() * 1.5 + 60);
+        double hover = 0;
+        for (Wp w : wps) hover += w.hoverS;
+        return (int) Math.round(distanceM() / Math.max(1, speed) + photos() * 3 + hover + wps.size() * 1.5 + 60);
     }
 
     public int estimatedBatteryPct() {
@@ -187,8 +201,8 @@ public final class Mission {
             }
         }
         for (int i = 1; i < wps.size(); i++) {
-            if (dist2(wps.get(i - 1).lat, wps.get(i - 1).lng, wps.get(i).lat, wps.get(i).lng) > 300) {
-                out.add("Two points are more than 300 m apart; that doesn't look like a roof scan.");
+            if (dist2(wps.get(i - 1).lat, wps.get(i - 1).lng, wps.get(i).lat, wps.get(i).lng) > 500) {
+                out.add("Points " + i + " and " + (i + 1) + " are more than 1600 ft apart; keep the path within sight.");
                 break;
             }
         }
