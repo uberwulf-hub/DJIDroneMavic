@@ -55,6 +55,17 @@ public final class Telemetry {
         public double homeRelBearing = Double.NaN;
         public int returnSeconds = -1, returnBatteryNeeded = -1;
         public boolean connected;
+        /** Obstacle sensors: something close (DJI says "dangerous"), how far, which side; drone braking/steering around it. */
+        public boolean obstacleClose, braking, avoiding, ascentLimited;
+        public double obstacleM = Double.NaN;
+        public String obstacleSide = "";
+        /** 0 calm, 1 strong wind, 2 very strong wind. */
+        public int windLevel;
+        public boolean landingConfirmNeeded, motorsOn;
+        /** 0 clear, 1 near a restricted zone, 2 in a warning / altitude-limited zone, 3 in a restricted zone. */
+        public int flyZone;
+        /** The drone's own max-height setting (metres), -1 unknown. */
+        public int maxHeightM = -1;
         /** When this snapshot was taken (phone clock). */
         public long time = System.currentTimeMillis();
     }
@@ -77,6 +88,12 @@ public final class Telemetry {
     private volatile int sdRemaining = -1, sdRecordSec = -1;
     private volatile boolean sdInserted = true, sdFull;
     private dji.sdk.camera.Camera cameraAttached;
+    // obstacle sensors, wind, fly zones
+    private final java.util.Map<String, Double> obstacleBySide = new java.util.concurrent.ConcurrentHashMap<>();
+    private volatile boolean braking, avoiding, ascentLimited;
+    private volatile int flyZone, maxHeightM = -1;
+    private boolean flyZoneAttached;
+    private long maxHeightAskedMs;
     private final Context appContext;
     // battery drain tracking for the return estimate
     private long flightStartMs;
@@ -116,6 +133,30 @@ public final class Telemetry {
         if (fc != null && fc != attachedTo) {
             attachedTo = fc;
             fc.setStateCallback(this::onState);
+            attachSensors(fc);
+        }
+        if (fc != null && System.currentTimeMillis() - maxHeightAskedMs > 60_000) {
+            maxHeightAskedMs = System.currentTimeMillis();
+            fc.getMaxFlightHeight(new dji.common.util.CommonCallbacks.CompletionCallbackWith<Integer>() {
+                @Override
+                public void onSuccess(Integer m) {
+                    if (m != null) maxHeightM = m;
+                }
+
+                @Override
+                public void onFailure(dji.common.error.DJIError error) {
+                }
+            });
+        }
+        if (!flyZoneAttached) {
+            try {
+                dji.sdk.flightcontroller.FlyZoneManager fz = DJISDKManager.getInstance().getFlyZoneManager();
+                if (fz != null) {
+                    fz.setFlyZoneStateCallback(z -> flyZone = flyZoneLevel(z));
+                    flyZoneAttached = true;
+                }
+            } catch (Exception ignored) {
+            }
         }
         BaseProduct product = DJISDKManager.getInstance().getProduct();
         dji.sdk.battery.Battery battery = product != null && product.isConnected() ? product.getBattery() : null;
@@ -152,6 +193,43 @@ public final class Telemetry {
                 sdRecordSec = st.getAvailableRecordingTimeInSeconds();
             });
         }
+    }
+
+    private void attachSensors(FlightController fc) {
+        try {
+            dji.sdk.flightcontroller.FlightAssistant fa = fc.getFlightAssistant();
+            if (fa == null) return;
+            fa.setVisionDetectionStateUpdatedCallback(v -> {
+                String side = v.getPosition() == null ? "front" : sideName(v.getPosition());
+                double d = v.getObstacleDistanceInMeters();
+                if (v.isSensorBeingUsed() && v.getSystemWarning() == dji.common.flightcontroller.VisionSystemWarning.DANGEROUS
+                        && d > 0 && d < 20) obstacleBySide.put(side, d);
+                else obstacleBySide.remove(side);
+            });
+            fa.setVisionControlStateUpdatedcallback(v -> {
+                braking = v.isBraking();
+                avoiding = v.isAvoidingActiveObstacleCollision();
+                ascentLimited = v.isAscentLimitedByObstacle();
+            });
+        } catch (Exception ignored) {
+            // older firmware or no vision system: no obstacle callouts
+        }
+    }
+
+    private static String sideName(dji.common.flightcontroller.VisionSensorPosition p) {
+        if (p == dji.common.flightcontroller.VisionSensorPosition.TAIL) return "behind";
+        if (p == dji.common.flightcontroller.VisionSensorPosition.LEFT) return "on the left";
+        if (p == dji.common.flightcontroller.VisionSensorPosition.RIGHT) return "on the right";
+        return "in front";
+    }
+
+    private static int flyZoneLevel(dji.common.flightcontroller.flyzone.FlyZoneState z) {
+        if (z == null) return 0;
+        String n = z.name();
+        if (n.contains("RESTRICTED") && n.startsWith("IN_")) return 3;
+        if (n.contains("WARNING")) return 2;
+        if (n.startsWith("NEAR")) return 1;
+        return 0;
     }
 
     public static FlightController flightController() {
@@ -217,6 +295,23 @@ public final class Telemetry {
         s.sdRemainingMB = sdRemaining;
         s.sdRecordSecondsLeft = sdRecordSec;
         s.connected = true;
+        for (java.util.Map.Entry<String, Double> e : obstacleBySide.entrySet()) {
+            if (Double.isNaN(s.obstacleM) || e.getValue() < s.obstacleM) {
+                s.obstacleM = e.getValue();
+                s.obstacleSide = e.getKey();
+            }
+        }
+        s.obstacleClose = !Double.isNaN(s.obstacleM);
+        s.braking = braking;
+        s.avoiding = avoiding;
+        s.ascentLimited = ascentLimited;
+        dji.common.flightcontroller.FlightWindWarning w = state.getFlightWindWarning();
+        s.windLevel = w == dji.common.flightcontroller.FlightWindWarning.LEVEL_2 ? 2
+                : w == dji.common.flightcontroller.FlightWindWarning.LEVEL_1 ? 1 : 0;
+        s.landingConfirmNeeded = state.isLandingConfirmationNeeded();
+        s.motorsOn = state.areMotorsOn();
+        s.flyZone = flyZone;
+        s.maxHeightM = maxHeightM;
         estimateReturn(s);
 
         LocationCoordinate2D home = state.getHomeLocation();

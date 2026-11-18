@@ -73,8 +73,8 @@ public class SettingsActivity extends Activity {
         swCasual.setOnCheckedChangeListener((b, on) -> {
             VoiceAlerts.setCasual(this, on);
             VoiceAlerts va = VoiceAlerts.get(this);
-            va.say("styletest", va.line("Standard voice style.",
-                    "Casual mode on. I'll keep it chill.", "Casual mode. Let's have some fun up there."), 0);
+            va.say("styletest", on ? Captain.takeoff(Telemetry.get(this).last(), Prefs.isImperial(this), new java.util.Random())
+                    : "Standard voice style.", 0);
         });
         android.widget.RadioGroup ll = findViewById(R.id.low_light);
         String llm = LowLight.mode(this);
