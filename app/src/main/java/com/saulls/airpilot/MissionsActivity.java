@@ -68,7 +68,13 @@ public class MissionsActivity extends Activity {
         Button planner = pill("Open planner");
         planner.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(PLANNER_URL))));
         bar.addView(planner);
-        Button imp = pill("Import from Drive / Files");
+        Button sync = pill("\u27F3 Drive");
+        sync.setOnClickListener(v -> syncDrive(true));
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+                DensityUtil.dip2px(this, 40));
+        sp.leftMargin = DensityUtil.dip2px(this, 8);
+        bar.addView(sync, sp);
+        Button imp = pill("Import file");
         imp.setOnClickListener(v -> {
             Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             i.addCategory(Intent.CATEGORY_OPENABLE);
@@ -140,6 +146,40 @@ public class MissionsActivity extends Activity {
     protected void onResume() {
         super.onResume();
         map.onResume();
+        if (DriveMissions.signedIn(this)) syncDrive(false);
+    }
+
+    private boolean syncing;
+
+    /** Pull plans saved by the planner into the list (Google Drive: Air Pilot / Missions). */
+    private void syncDrive(boolean userAsked) {
+        if (syncing) return;
+        if (!DriveMissions.signedIn(this)) {
+            if (userAsked) new AlertDialog.Builder(this).setTitle("Google Drive")
+                    .setMessage("Sign in to Google Drive in Safety & Settings first. Then plans you save from the planner "
+                            + "with \"Save to Drive\" show up here automatically.")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        syncing = true;
+        String keep = selected == null ? null : selected.id;
+        new Thread(() -> {
+            String msg;
+            try {
+                msg = DriveMissions.sync(this);
+            } catch (Exception e) {
+                msg = e.getMessage();
+            }
+            String result = msg;
+            runOnUiThread(() -> {
+                syncing = false;
+                if (isDestroyed()) return;
+                refresh(keep);
+                if (userAsked || (result != null && !result.contains("up to date") && !result.startsWith("No plans"))) {
+                    Toast.makeText(this, result, Toast.LENGTH_SHORT).show();
+                }
+            });
+        }, "drive-missions").start();
     }
 
     @Override
@@ -172,7 +212,8 @@ public class MissionsActivity extends Activity {
         if (all.isEmpty()) {
             TextView t = new TextView(this);
             t.setText("No missions yet.\n\n1. On a computer, open the planner:\n" + PLANNER_URL
-                    + "\n\n2. Draw the roof, then Send to phone (scan the QR code) or download the file into Google Drive and tap Import.");
+                    + "\n\n2. Draw a path, then either Send to phone (scan the QR code) or \u2601 Save to Drive. "
+                    + "Plans saved to Drive appear here automatically.");
             t.setTextColor(0xCCFFFFFF);
             t.setTextSize(14);
             t.setTextIsSelectable(true);
@@ -184,7 +225,7 @@ public class MissionsActivity extends Activity {
         for (Mission m : all) if (m.id.equals(showId)) show = m;
         for (Mission m : all) {
             TextView row = new TextView(this);
-            row.setText(m.name + "\n" + ("orbit".equals(m.kind) ? "Orbit" : "custom".equals(m.kind) ? "Custom path" : "Roof sweep") + " · "
+            row.setText((m.id.startsWith("d_") ? "\u2601 " : "") + m.name + "\n" + ("orbit".equals(m.kind) ? "Orbit" : "custom".equals(m.kind) ? "Custom path" : "Roof sweep") + " · "
                     + m.wps.size() + " points · " + Units.duration(m.estimatedSeconds()));
             row.setTextColor(Color.WHITE);
             row.setTextSize(15);
@@ -254,6 +295,8 @@ public class MissionsActivity extends Activity {
         if (selected == null) return;
         Mission m = selected;
         new AlertDialog.Builder(this).setTitle("Delete \"" + m.name + "\"?")
+                .setMessage(m.id.startsWith("d_") ? "This plan comes from Google Drive; delete it there (in the planner's Drive folder) "
+                        + "or it will come back on the next sync." : null)
                 .setPositiveButton("Delete", (d, w) -> {
                     Mission.delete(this, m.id);
                     refresh(null);

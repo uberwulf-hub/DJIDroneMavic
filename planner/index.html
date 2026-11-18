@@ -224,9 +224,12 @@
       <div class="btns">
         <button class="b primary" id="send" disabled>Send to phone (QR)</button>
         <button class="b" id="download" disabled>Download file</button>
+        <button class="b" id="gsave" disabled>☁ Save to Drive</button>
+        <button class="b" id="gopen">☁ Open from Drive</button>
         <button class="b" id="save" disabled>Save here</button>
         <label class="b">Open file…<input id="open" type="file" accept=".json,.airpilot" hidden></label>
       </div>
+      <p class="help" id="gstatus" style="margin-top:8px"></p>
       <ul class="lib" id="lib"></ul>
     </div>
   </aside>
@@ -245,6 +248,27 @@
   <div class="btns"><button class="b" id="copy">Copy link</button><button class="b primary" id="close">Done</button></div>
 </dialog>
 
+<dialog id="gsetup">
+  <h2 style="margin-top:0">Connect Google Drive (one time)</h2>
+  <p class="help">In the same Google Cloud project you used for the phone's Drive sync:</p>
+  <ol class="help" style="padding-left:18px">
+    <li>Open <b>console.cloud.google.com</b> → project <b>Air Pilot</b> → <b>Google Auth Platform → Clients → Create client</b>.</li>
+    <li>Application type: <b>Web application</b>. Name: <b>Air Pilot Planner</b>.</li>
+    <li>Under <b>Authorized JavaScript origins</b> add <code>https://uberwulf-hub.github.io</code> (no slash at the end). Leave redirect URIs empty.</li>
+    <li>Click <b>Create</b> and copy the <b>Client ID</b> (ends in <code>.apps.googleusercontent.com</code>).</li>
+  </ol>
+  <input id="gclient" type="text" placeholder="Paste the Client ID here" style="width:100%">
+  <div class="btns"><button class="b" id="gsetup-cancel">Cancel</button><button class="b primary" id="gsetup-ok">Save</button></div>
+</dialog>
+
+<dialog id="glist">
+  <h2 style="margin-top:0">Plans in Drive</h2>
+  <p class="help">Folder: Air Pilot / Missions</p>
+  <ul class="plist" id="glist-items" style="max-height:340px"></ul>
+  <div class="btns"><button class="b" id="glist-close">Close</button></div>
+</dialog>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="plan.js"></script>
@@ -474,7 +498,7 @@
     if (plan && mode !== 'custom') drawGenerated(plan);
     if (plan && mode === 'custom') drawAim(plan);
     renderStats(plan, msgs);
-    ['send', 'download', 'save'].forEach(function (id) { $(id).disabled = !plan; });
+    ['send', 'download', 'save', 'gsave'].forEach(function (id) { $(id).disabled = !plan; });
     $('edit-sweep').disabled = !(plan && mode === 'sweep');
     $('edit-orbit').disabled = !(plan && mode === 'orbit');
   }
@@ -609,8 +633,12 @@
   /** Opening a plan file makes it editable as a custom path. */
   $('open').onchange = function (e) {
     var f = e.target.files[0]; if (!f) return;
-    f.text().then(function (t) {
-      var m = JSON.parse(t);
+    f.text().then(function (t) { loadPlan(JSON.parse(t)); })
+      .catch(function (err) { alert('Could not open that file: ' + err.message); });
+    e.target.value = '';
+  };
+
+  function loadPlan(m) {
       if (m.app !== 'airpilot-mission') throw new Error('Not an Air Pilot plan');
       snapshotPts();
       pts = m.wp.map(function (w) {
@@ -623,9 +651,108 @@
       $('name').value = m.name || '';
       setMode('custom');
       map.fitBounds(L.latLngBounds(pts.map(function (q) { return [q.lat, q.lng]; })).pad(0.5));
-    }).catch(function (err) { alert('Could not open that file: ' + err.message); });
-    e.target.value = '';
+  }
+
+  // ---------- Google Drive (drive.file: Air Pilot only sees files it created)
+  var DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  var gToken = null, gTokenExp = 0, gTokenClient = null;
+  function gClientId() { try { return localStorage.getItem('airplan-gclient') || ''; } catch (e) { return ''; } }
+  function gStatus(t) { $('gstatus').textContent = t || ''; }
+  function needSetup() {
+    if (gClientId()) return false;
+    $('gclient').value = '';
+    $('gsetup').showModal();
+    return true;
+  }
+  $('gsetup-cancel').onclick = function () { $('gsetup').close(); };
+  $('gsetup-ok').onclick = function () {
+    var id = $('gclient').value.trim();
+    if (!/\.apps\.googleusercontent\.com$/.test(id)) { alert('That doesn\'t look like a Client ID (it ends in .apps.googleusercontent.com).'); return; }
+    try { localStorage.setItem('airplan-gclient', id); } catch (e) {}
+    gTokenClient = null;
+    $('gsetup').close();
+    gStatus('Drive connected. Click Save to Drive again.');
   };
+  function gGetToken() {
+    return new Promise(function (resolve, reject) {
+      if (gToken && Date.now() < gTokenExp - 60000) return resolve(gToken);
+      if (!window.google || !google.accounts || !google.accounts.oauth2) return reject(new Error('Google sign-in didn\'t load (check the internet connection).'));
+      if (!gTokenClient) gTokenClient = google.accounts.oauth2.initTokenClient({ client_id: gClientId(), scope: DRIVE_SCOPE, callback: function () {} });
+      gTokenClient.callback = function (r) {
+        if (r.error) return reject(new Error(r.error_description || r.error));
+        gToken = r.access_token; gTokenExp = Date.now() + (r.expires_in || 3600) * 1000; resolve(gToken);
+      };
+      gTokenClient.error_callback = function (e) { reject(new Error(e && e.message ? e.message : 'Sign-in was closed')); };
+      gTokenClient.requestAccessToken();
+    });
+  }
+  async function gApi(method, url, body, type) {
+    var t = await gGetToken();
+    var h = { Authorization: 'Bearer ' + t };
+    if (type) h['Content-Type'] = type;
+    var r = await fetch(url, { method: method, headers: h, body: body });
+    if (r.status === 401) { gToken = null; throw new Error('Google sign-in expired; try again.'); }
+    if (!r.ok) throw new Error('Drive said ' + r.status + ': ' + (await r.text()).slice(0, 200));
+    var ct = r.headers.get('content-type') || '';
+    return ct.indexOf('json') >= 0 ? r.json() : r.text();
+  }
+  function q(s) { return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+  async function gFolder(name, parent) {
+    var res = await gApi('GET', 'https://www.googleapis.com/drive/v3/files?spaces=drive&fields=files(id)&q=' +
+      encodeURIComponent("name = '" + q(name) + "' and mimeType = 'application/vnd.google-apps.folder' and trashed = false and '" + parent + "' in parents"));
+    if (res.files && res.files.length) return res.files[0].id;
+    var made = await gApi('POST', 'https://www.googleapis.com/drive/v3/files?fields=id',
+      JSON.stringify({ name: name, mimeType: 'application/vnd.google-apps.folder', parents: [parent] }), 'application/json');
+    return made.id;
+  }
+  async function gMissionsFolder() { return gFolder('Missions', await gFolder('Air Pilot', 'root')); }
+  $('gsave').onclick = async function () {
+    if (!plan || needSetup()) return;
+    try {
+      gStatus('Saving to Drive…');
+      var folder = await gMissionsFolder();
+      var name = fileName(plan);
+      var body = JSON.stringify(AirPlan.toTransfer(plan), null, 1);
+      var found = await gApi('GET', 'https://www.googleapis.com/drive/v3/files?fields=files(id)&q=' +
+        encodeURIComponent("name = '" + q(name) + "' and '" + folder + "' in parents and trashed = false"));
+      if (found.files && found.files.length) {
+        await gApi('PATCH', 'https://www.googleapis.com/upload/drive/v3/files/' + found.files[0].id + '?uploadType=media', body, 'application/json');
+        gStatus('✔ Updated "' + name + '" in Drive (Air Pilot / Missions). The phone picks it up when you open Missions.');
+      } else {
+        var boundary = 'airpilot' + Date.now();
+        var multipart = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' +
+          JSON.stringify({ name: name, parents: [folder], mimeType: 'application/json' }) + '\r\n--' + boundary +
+          '\r\nContent-Type: application/json\r\n\r\n' + body + '\r\n--' + boundary + '--';
+        await gApi('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', multipart,
+          'multipart/related; boundary=' + boundary);
+        gStatus('✔ Saved "' + name + '" to Drive (Air Pilot / Missions). The phone picks it up when you open Missions.');
+      }
+    } catch (err) { gStatus('Drive: ' + err.message); }
+  };
+  $('gopen').onclick = async function () {
+    if (needSetup()) return;
+    try {
+      gStatus('Reading Drive…');
+      var folder = await gMissionsFolder();
+      var res = await gApi('GET', 'https://www.googleapis.com/drive/v3/files?orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime)&q=' +
+        encodeURIComponent("'" + folder + "' in parents and trashed = false"));
+      var ul = $('glist-items'); ul.innerHTML = '';
+      (res.files || []).forEach(function (f) {
+        var li = document.createElement('li');
+        li.innerHTML = '<span style="flex:1">' + f.name.replace(/\.airpilot\.json$/, '').replace(/</g, '&lt;') + '</span><span class="help">' +
+          new Date(f.modifiedTime).toLocaleDateString() + '</span>';
+        li.onclick = async function () {
+          try { loadPlan(JSON.parse(await gApi('GET', 'https://www.googleapis.com/drive/v3/files/' + f.id + '?alt=media'))); $('glist').close(); gStatus(''); }
+          catch (err) { alert('Could not open it: ' + err.message); }
+        };
+        ul.appendChild(li);
+      });
+      if (!(res.files || []).length) ul.innerHTML = '<li class="help">No plans saved to Drive yet.</li>';
+      gStatus('');
+      $('glist').showModal();
+    } catch (err) { gStatus('Drive: ' + err.message); }
+  };
+  $('glist-close').onclick = function () { $('glist').close(); };
 
   // ---------- search / locate
   // Esri's address search (forgiving, good US coverage, no key needed for searches) with
