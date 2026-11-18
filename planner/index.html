@@ -45,8 +45,13 @@
   .warn { color: var(--warn); font-size: 13px; margin: 6px 0 0; }
   .bad { color: var(--bad); font-size: 13px; margin: 6px 0 0; }
   .ok { color: var(--good); font-size: 13px; margin: 6px 0 0; }
-  .search { display: flex; gap: 6px; margin-bottom: 12px; }
+  .search { display: flex; gap: 6px; margin-bottom: 12px; position: relative; }
   .search input { flex: 1; width: auto; }
+  .sugg { position: absolute; top: 40px; left: 0; right: 0; z-index: 1000; background: #151b1f;
+    border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: none; }
+  .sugg div { padding: 9px 10px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #222b31; }
+  .sugg div:last-child { border-bottom: 0; }
+  .sugg div:hover, .sugg div.on { background: var(--accent); }
   dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px;
     max-width: 440px; padding: 20px; }
   dialog::backdrop { background: rgba(0,0,0,.6); }
@@ -71,9 +76,10 @@
     <div class="sub">Plan a roof scan here, then send it to the phone.</div>
 
     <div class="search">
-      <input id="q" type="text" placeholder="Search an address…">
+      <input id="q" type="text" placeholder="Type an address, e.g. 123 Main St Tucson" autocomplete="off">
       <button class="b" id="go">Find</button>
       <button class="b" id="me" title="My location">◎</button>
+      <div class="sugg" id="sugg"></div>
     </div>
 
     <div class="tabs">
@@ -373,14 +379,75 @@
   };
 
   // ---------- search / locate
-  $('go').onclick = function () {
-    var q = $('q').value.trim(); if (!q) return;
-    fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q))
+  // Esri's address search (forgiving, good US coverage, no key needed for searches) with
+  // OpenStreetMap as a backup. Suggestions appear as you type; coordinates also work.
+  var ESRI = 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/';
+  var suggTimer = null, suggItems = [], suggOn = -1;
+  function goTo(lat, lng) { map.setView([lat, lng], 20); hideSugg(); }
+  function hideSugg() { $('sugg').style.display = 'none'; suggItems = []; suggOn = -1; }
+  function center() { var c = map.getCenter(); return c.lng.toFixed(4) + ',' + c.lat.toFixed(4); }
+  function showSugg(items) {
+    suggItems = items; suggOn = -1;
+    var box = $('sugg');
+    box.innerHTML = '';
+    items.forEach(function (it, i) {
+      var d = document.createElement('div');
+      d.textContent = it.text;
+      d.onmousedown = function (e) { e.preventDefault(); pick(i); };
+      box.appendChild(d);
+    });
+    box.style.display = items.length ? 'block' : 'none';
+  }
+  function pick(i) {
+    var it = suggItems[i]; if (!it) return;
+    $('q').value = it.text;
+    fetch(ESRI + 'findAddressCandidates?f=json&maxLocations=1&singleLine=' + encodeURIComponent(it.text) +
+      '&magicKey=' + encodeURIComponent(it.magicKey))
       .then(function (r) { return r.json(); })
-      .then(function (r) { if (r[0]) map.setView([+r[0].lat, +r[0].lon], 20); else alert('Address not found'); })
-      .catch(function () { alert('Search failed'); });
-  };
-  $('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('go').click(); });
+      .then(function (r) {
+        var c = r.candidates && r.candidates[0];
+        if (c) goTo(c.location.y, c.location.x); else search(it.text);
+      }).catch(function () { search(it.text); });
+  }
+  $('q').addEventListener('input', function () {
+    clearTimeout(suggTimer);
+    var t = $('q').value.trim();
+    if (t.length < 3 || /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(t)) { hideSugg(); return; }
+    suggTimer = setTimeout(function () {
+      fetch(ESRI + 'suggest?f=json&maxSuggestions=6&location=' + center() + '&text=' + encodeURIComponent(t))
+        .then(function (r) { return r.json(); })
+        .then(function (r) { if ($('q').value.trim() === t) showSugg(r.suggestions || []); })
+        .catch(function () {});
+    }, 250);
+  });
+  $('q').addEventListener('keydown', function (e) {
+    var n = suggItems.length;
+    if (e.key === 'ArrowDown' && n) { suggOn = (suggOn + 1) % n; mark(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp' && n) { suggOn = (suggOn - 1 + n) % n; mark(); e.preventDefault(); }
+    else if (e.key === 'Escape') hideSugg();
+    else if (e.key === 'Enter') { e.preventDefault(); if (suggOn >= 0) pick(suggOn); else $('go').click(); }
+  });
+  function mark() { Array.prototype.forEach.call($('sugg').children, function (d, i) { d.className = i === suggOn ? 'on' : ''; }); }
+  $('q').addEventListener('blur', function () { setTimeout(hideSugg, 150); });
+
+  function search(q) {
+    var m = q.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+    if (m) { goTo(+m[1], +m[2]); return; }
+    fetch(ESRI + 'findAddressCandidates?f=json&maxLocations=1&location=' + center() + '&singleLine=' + encodeURIComponent(q))
+      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        var c = r.candidates && r.candidates[0];
+        if (c && c.score >= 70) return goTo(c.location.y, c.location.x);
+        return fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q))
+          .then(function (r2) { return r2.json(); })
+          .then(function (r2) {
+            if (r2[0]) goTo(+r2[0].lat, +r2[0].lon);
+            else alert("Couldn't find that address. Try picking one from the list as you type, or use ◎ and pan the map.");
+          });
+      })
+      .catch(function () { alert('Search failed (check the internet connection).'); });
+  }
+  $('go').onclick = function () { var q = $('q').value.trim(); if (q) search(q); };
   $('me').onclick = function () {
     navigator.geolocation.getCurrentPosition(function (p) { map.setView([p.coords.latitude, p.coords.longitude], 20); },
       function () { alert('Location not available'); });
