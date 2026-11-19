@@ -117,8 +117,17 @@ public final class ActiveTracker implements ActiveTrackMissionOperatorListener {
         dji.common.util.CommonCallbacks.CompletionCallback<DJIError> cb = err -> {
             if (err != null) endSensing("Couldn't turn on subject detection: " + err.getDescription());
         };
-        if (k.isQuickShot()) op.enableAutoSensingForQuickShot(cb);
-        else op.enableAutoSensing(cb);
+        lastLogged = null;
+        log("subject sensing " + k.title + ", state " + op.getCurrentState());
+        prepare(() -> {
+            if (!sensing) return;
+            dji.common.util.CommonCallbacks.CompletionCallback<DJIError> cb2 = err -> {
+                log("subject sensing answer: " + err(err));
+                cb.onResult(err);
+            };
+            if (k.isQuickShot()) op.enableAutoSensingForQuickShot(cb2);
+            else op.enableAutoSensing(cb2);
+        });
         return null;
     }
 
@@ -132,7 +141,9 @@ public final class ActiveTracker implements ActiveTrackMissionOperatorListener {
         if (kind.isQuickShot()) mission.setQuickShotMode(quickShotFor(kind));
         mission.setTargetIndex(index);
         update("Locking on…", null, 0);
+        log("picked subject " + index);
         op.startAutoSensingMission(mission, err -> {
+            log("subject mission answer: " + err(err));
             if (err != null) end("Couldn't start: " + err.getDescription());
         });
     }
@@ -198,14 +209,51 @@ public final class ActiveTracker implements ActiveTrackMissionOperatorListener {
             running = false;
             return "DJI doesn't allow ActiveTrack on this drone through other apps. Try Follow me (GPS) or Orbit me (GPS).";
         }
-        startAttempt(mission, 1);
-        update("Locking on…", null, 0);
+        ctx = context.getApplicationContext();
+        lastLogged = null;
+        log("draw-a-box " + k.title + ", box " + normalizedBox + ", state " + st);
+        update("Getting ready…", null, 0);
+        prepare(() -> {
+            if (running) startAttempt(mission, 1);
+        });
         return null;
+    }
+
+    private String lastLogged;
+
+    /** Every state the drone reports goes into the flight's events log, so failures can be diagnosed. */
+    private void log(String what) {
+        if (ctx == null || what == null || what.equals(lastLogged)) return;
+        lastLogged = what;
+        FlightRecorder.event(ctx, "ActiveTrack: " + what);
+    }
+
+    private static String err(DJIError e) {
+        return e == null ? "ok" : e.getDescription() + " (code " + e.getErrorCode() + ")";
+    }
+
+    /** Make sure nothing else holds the controls, and apply DJI's recommended tracking settings, then run. */
+    private void prepare(Runnable then) {
+        dji.sdk.flightcontroller.FlightController fc = Telemetry.flightController();
+        Runnable recommended = () -> op.setRecommendedConfiguration(e -> {
+            log("recommended settings: " + err(e));
+            main.postDelayed(then, 700);
+        });
+        if (fc == null) {
+            recommended.run();
+            return;
+        }
+        fc.setVirtualStickModeEnabled(false, e -> {
+            log("app control off: " + err(e));
+            main.postDelayed(recommended, 300);
+        });
     }
 
     /** Try to start; if the drone times out, apply DJI's recommended settings and try once more. */
     private void startAttempt(ActiveTrackMission mission, int attempt) {
+        log("start attempt " + attempt + ", drone state " + op.getCurrentState());
         op.startTracking(mission, error -> {
+            log("start attempt " + attempt + " answer: " + err(error));
             if (error == null || !running) return;
             String d = error.getDescription() == null ? "" : error.getDescription();
             if (attempt == 1) {
@@ -239,6 +287,10 @@ public final class ActiveTracker implements ActiveTrackMissionOperatorListener {
     public void onUpdate(ActiveTrackMissionEvent e) {
         if (e == null) return;
         ActiveTrackTrackingState ts0 = e.getTrackingState();
+        log("drone says " + e.getCurrentState()
+                + (e.getError() != null ? ", error " + err(e.getError()) : "")
+                + (ts0 != null && ts0.getReason() != null ? ", reason " + ts0.getReason() : "")
+                + (ts0 != null && ts0.getAutoSensedSubjects() != null && ts0.getAutoSensedSubjects().length > 0 ? ", sees subjects" : ""));
         if (sensing) {
             dji.common.mission.activetrack.SubjectSensingState[] subs = ts0 == null ? null : ts0.getAutoSensedSubjects();
             java.util.List<android.graphics.RectF> rects = new java.util.ArrayList<>();
