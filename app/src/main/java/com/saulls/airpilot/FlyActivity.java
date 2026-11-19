@@ -35,7 +35,7 @@ import dji.ux.widget.controls.LensControlWidget;
 /**
  * Activity that shows all the UI elements together
  */
-public class FlyActivity extends Activity implements Telemetry.Listener, SmartMove.Listener, ActiveTracker.Listener, MissionRunner.Listener {
+public class FlyActivity extends Activity implements Telemetry.Listener, SmartMove.Listener, ActiveTracker.Listener, MissionRunner.Listener, VisionTracker.Listener {
 
     public static final String EXTRA_MISSION = "mission";
     private Mission pendingMission;
@@ -180,6 +180,20 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         trackCancel = findViewById(R.id.track_cancel);
         trackOverlay.setOnBoxListener(this::onSubjectBoxed);
         trackOverlay.setOnSubjectListener(index -> {
+            if (VisionTracker.get(this).isChoosing()) {
+                VisionTracker.Det d = visionDets != null && index < visionDets.size() ? visionDets.get(index) : null;
+                String problem = VisionTracker.get(this).pick(d);
+                trackCancel.setVisibility(View.GONE);
+                if (problem != null) {
+                    new android.app.AlertDialog.Builder(this).setTitle("Can't start").setMessage(problem)
+                            .setPositiveButton("OK", null).show();
+                    return;
+                }
+                moveText.setText("Locking on\u2026");
+                moveHint.setText("Move a stick or tap STOP to end");
+                moveBanner.setVisibility(View.VISIBLE);
+                return;
+            }
             ActiveTracker.get().pick(index);
             FlightRecorder.event(this, "Picked subject #" + index);
             moveText.setText("Locking on…");
@@ -191,6 +205,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         findViewById(R.id.move_stop).setOnClickListener(v -> {
             SmartMove.get(this).stop("Stopped.");
             ActiveTracker.get().stop();
+            VisionTracker.get(this).stop("Stopped.");
             MissionRunner.get(this).stop("Mission stopped. The drone is hovering; fly it home when ready.");
         });
         closePanelsButton = findViewById(R.id.btn_close_panels);
@@ -223,7 +238,8 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         Telemetry.Snapshot s = Telemetry.get(this).last();
         if (!s.connected || System.currentTimeMillis() - s.time > 2000) return;
         if (s.flightMode == null || !s.flightMode.toLowerCase(java.util.Locale.US).contains("joystick")) return;
-        if (SmartMove.get(this).isRunning() || MissionRunner.get(this).isRunning() || ActiveTracker.get().isRunning()) return;
+        if (SmartMove.get(this).isRunning() || MissionRunner.get(this).isRunning() || ActiveTracker.get().isRunning()
+                || VisionTracker.get(this).isRunning()) return;
         if (System.currentTimeMillis() - lastRelease < 5000) return;
         lastRelease = System.currentTimeMillis();
         dji.sdk.flightcontroller.FlightController fc = Telemetry.flightController();
@@ -612,25 +628,30 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
     // ------------------------------------------------------------ smart moves
 
     private void showMovesDialog() {
-        if (SmartMove.get(this).isRunning() || ActiveTracker.get().isRunning()) return;
+        if (SmartMove.get(this).isRunning() || ActiveTracker.get().isRunning() || VisionTracker.get(this).isRunning()) return;
         final ActiveTracker.Kind[] kinds = ActiveTracker.Kind.values();
         // DJI vision tracking (ActiveTrack) times out on the Mavic Air from third-party apps, so it's
         // only offered on other drones.
         dji.sdk.base.BaseProduct prod = dji.sdk.sdkmanager.DJISDKManager.getInstance().getProduct();
         boolean trackingOk = true; // retrying with DJI's subject-sensing method
-        String[] items = new String[trackingOk ? kinds.length + 4 : 4];
-        items[0] = "\uD83D\uDEB4  Follow me  (uses your phone's GPS)";
-        items[1] = "\u21BB  Orbit me  (circles your phone's GPS)";
-        items[2] = "\u21BB  Orbit a spot  (the spot the camera faces)";
-        items[3] = "\u2196  Dronie  (fly back and up)";
-        if (trackingOk) for (int i = 0; i < kinds.length; i++) items[i + 4] = "\u25CE  " + kinds[i].title + "  (DJI tracking, experimental)";
+        final int base = 6;
+        String[] items = new String[trackingOk ? kinds.length + base : base];
+        items[0] = "\uD83D\uDC41  Track & follow  (phone vision: person, bike, car, dog)";
+        items[1] = "\uD83D\uDC41  Spotlight  (stays put, turns to keep them in frame)";
+        items[2] = "\uD83D\uDEB4  Follow me  (uses your phone's GPS)";
+        items[3] = "\u21BB  Orbit me  (circles your phone's GPS)";
+        items[4] = "\u21BB  Orbit a spot  (the spot the camera faces)";
+        items[5] = "\u2196  Dronie  (fly back and up)";
+        if (trackingOk) for (int i = 0; i < kinds.length; i++) items[i + base] = "\u25CE  " + kinds[i].title + "  (DJI tracking, experimental)";
         new android.app.AlertDialog.Builder(this)
                 .setTitle("Smart moves")
                 .setItems(items, (d, which) -> {
-                    if (which == 0) showMeMoveDialog(true);
-                    else if (which == 1) showMeMoveDialog(false);
-                    else if (which < 4) showGpsMoveDialog(which == 2);
-                    else confirmTrack(kinds[which - 4]);
+                    if (which == 0) confirmVision(VisionTracker.Mode.FOLLOW);
+                    else if (which == 1) confirmVision(VisionTracker.Mode.SPOTLIGHT);
+                    else if (which == 2) showMeMoveDialog(true);
+                    else if (which == 3) showMeMoveDialog(false);
+                    else if (which < 6) showGpsMoveDialog(which == 4);
+                    else confirmTrack(kinds[which - base]);
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
@@ -773,7 +794,87 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
                 .show();
     }
 
+    // ------------------------------------------------------------ phone-vision tracking
+
+    private java.util.List<VisionTracker.Det> visionDets;
+
+    private void confirmVision(VisionTracker.Mode mode) {
+        boolean follow = mode == VisionTracker.Mode.FOLLOW;
+        android.widget.CheckBox record = new android.widget.CheckBox(this);
+        record.setText("Record video while tracking");
+        record.setChecked(true);
+        record.setTextColor(0xFFFFFFFF);
+        android.widget.LinearLayout box = new android.widget.LinearLayout(this);
+        box.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad = DensityUtil.dip2px(this, 20);
+        box.setPadding(pad, pad / 2, pad, 0);
+        TextView tips = new TextView(this);
+        tips.setTextColor(Ui.TEXT);
+        tips.setTextSize(14);
+        tips.setText((follow
+                ? "Your phone watches the video and steers the drone: it turns to keep the subject centred and moves "
+                + "forward or back to keep them the same size, so it follows as they walk, run or ride away."
+                : "The drone stays where it is and turns (and tilts the camera) to keep the subject in frame.")
+                + "\n\nNew and experimental: start slow, in an open area, 15\u201330 ft from the subject at head height or "
+                + "a bit above, whole body in view. It holds height and won't fly sideways. It hovers if it loses "
+                + "them and stops after 10 seconds. Move a stick or tap STOP any time.");
+        box.addView(tips);
+        box.addView(record);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(follow ? "Track & follow" : "Spotlight")
+                .setView(box)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Choose subject", (d, w) -> {
+                    closeAllPanels();
+                    String problem = VisionTracker.get(this).beginChoosing(videoView(), mode, record.isChecked());
+                    if (problem != null) {
+                        new android.app.AlertDialog.Builder(this).setTitle("Can't start").setMessage(problem)
+                                .setPositiveButton("OK", null).show();
+                        return;
+                    }
+                    visionDets = null;
+                    trackOverlay.setSubjects(new java.util.ArrayList<>(), new int[0]);
+                    trackCancel.setVisibility(View.VISIBLE);
+                })
+                .show();
+    }
+
+    @Override
+    public void onVisionDetections(java.util.List<VisionTracker.Det> dets) {
+        visionDets = dets;
+        java.util.List<android.graphics.RectF> view = new java.util.ArrayList<>();
+        int[] idx = new int[dets.size()];
+        for (int i = 0; i < dets.size(); i++) {
+            view.add(fromVideo(dets.get(i).box));
+            idx[i] = i;
+        }
+        trackOverlay.setSubjects(view, idx);
+    }
+
+    @Override
+    public void onVisionTrack(android.graphics.RectF box, String status, int quality) {
+        moveBanner.setVisibility(View.VISIBLE);
+        moveText.setText(status);
+        moveHint.setText("Move a stick or tap STOP to end");
+        if (box == null) trackOverlay.setTarget(null, 0);
+        else trackOverlay.setTarget(fromVideo(box), quality == 2 ? 0xFF4ADE80 : quality == 1 ? 0xFFFBBF24 : 0xFFF87171);
+    }
+
+    @Override
+    public void onVisionEnded(String reason) {
+        visionDets = null;
+        trackOverlay.setSubjects(null, null);
+        trackOverlay.setTarget(null, 0);
+        trackCancel.setVisibility(View.GONE);
+        if (!SmartMove.get(this).isRunning() && !MissionRunner.get(this).isRunning()) moveBanner.setVisibility(View.GONE);
+        android.widget.Toast.makeText(this, reason, android.widget.Toast.LENGTH_LONG).show();
+    }
+
     private void cancelSelecting() {
+        if (VisionTracker.get(this).isChoosing()) {
+            VisionTracker.get(this).cancelChoosing();
+            trackOverlay.setSubjects(null, null);
+        }
         if (ActiveTracker.get().isSensing()) {
             ActiveTracker.get().cancelSensing();
             trackOverlay.setSubjects(null, null);
@@ -1275,6 +1376,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
         telemetry.addListener(this);
         SmartMove.get(this).setListener(this);
         ActiveTracker.get().setListener(this);
+        VisionTracker.get(this).setListener(this);
         MissionRunner.get(this).setListener(this);
         loadPendingMission(getIntent());
         Weather.fetch(this, w -> {
@@ -1282,6 +1384,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
             updateReadyCard(Telemetry.get(this).last());
         });
         moveBanner.setVisibility(SmartMove.get(this).isRunning() || ActiveTracker.get().isRunning()
+                || VisionTracker.get(this).isRunning()
                 || MissionRunner.get(this).isRunning() ? View.VISIBLE : View.GONE);
     }
 
@@ -1298,6 +1401,7 @@ public class FlyActivity extends Activity implements Telemetry.Listener, SmartMo
 
     @Override
     protected void onDestroy() {
+        VisionTracker.get(this).stop("Left the flight screen.");
         mapWidget.onDestroy();
         super.onDestroy();
     }

@@ -150,7 +150,7 @@ public class TrackOverlay extends View {
     protected void onDraw(Canvas c) {
         if (subjects != null) {
             c.drawText(subjects.isEmpty() ? "Looking for people… stand 10–30 ft in front of the camera"
-                    : "Tap the person to track", getWidth() / 2f, getHeight() * 0.22f, hint);
+                    : "Tap who (or what) to track", getWidth() / 2f, getHeight() * 0.22f, hint);
             subjectPaint.setStyle(Paint.Style.STROKE);
             subjectPaint.setStrokeWidth(dp(3));
             subjectPaint.setColor(Color.parseColor("#4FC3F7"));
